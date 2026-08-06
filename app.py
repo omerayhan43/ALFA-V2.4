@@ -294,18 +294,11 @@ if st.session_state.df_merged is not None:
                 th = tek_hisse_df.iloc[0]
                 p_lim = float(8 + (th['ROE_0'] - 90) * 0.07 if th['ROE_0'] > 90 else 8)
                 
-                c_a = bool(th['Getiri_2a'] > oto_2a)
-                c_b = bool(th['ROE_0'] > tufe_12)
-                c_c = bool(th['NetBorc_FAVOK'] < 4)
-                c_d = bool(th['PDDD'] < p_lim)
-                c_ee = bool(th['Getiri_2h'] > (oto_2h - 10))
-                c_f = bool(th['NetSatisBuyume'] > 0)
-                c_g = bool(th['FAVOKBuyume'] > tufe_12)
-                c_h = bool((th['BrutEFKBuyume'] > tufe_12) and (th['EFKBuyume'] > tufe_12))
-                c_j = bool(th['Getiri_1a'] > -15)
-                c_k = bool(th['HAOran'] < 60)
-                c_teyit = bool((th['EFK_0'] >= th['ef_EFK_1']) or (th['EFK_0'] >= th['ef_EFK_4']))
-                c_roe_t = bool((th['ROE_0'] >= th['ef_ROE_1']) or (th['ROE_0'] >= th['ef_ROE_4']))
+                # Kriter Mantığı
+                c_a, c_b, c_c = th['Getiri_2a'] > oto_2a, th['ROE_0'] > tufe_12, th['NetBorc_FAVOK'] < 4
+                c_d, c_ee, c_f = th['PDDD'] < p_lim, th['Getiri_2h'] > (oto_2h - 10), th['NetSatisBuyume'] > 0
+                c_g, c_h, c_j = th['FAVOKBuyume'] > tufe_12, (th['BrutEFKBuyume'] > tufe_12) & (th['EFKBuyume'] > tufe_12), th['Getiri_1a'] > -15
+                c_k, c_teyit, c_roe_t = th['HAOran'] < 60, (th['EFK_0'] >= th['ef_EFK_1']) | (th['EFK_0'] >= th['ef_EFK_4']), (th['ROE_0'] >= th['ef_ROE_1']) | (th['ROE_0'] >= th['ef_ROE_4'])
                 
                 takilan_kriterler = []
                 if not c_b: takilan_kriterler.append("ROE > TÜFE")
@@ -319,51 +312,56 @@ if st.session_state.df_merged is not None:
                 if not c_j: takilan_kriterler.append("1A Getiri > -15")
                 if not c_k: takilan_kriterler.append("Halka Açıklık < 60")
 
-                col1, col2 = st.columns(2)
+                # Skorlama Hesaplamaları
+                roe_val, m6_val, m2_val, m1_val, pddd_val = float(th['ROE_0']), float(th['Getiri_6a']), float(th['Getiri_2a']), float(th['Getiri_1a']), float(th['PDDD'])
+                eb_val, fb_val, sb_val = float(th['BrutEFKBuyume']), float(th['FAVOKBuyume']), float(th['NetSatisBuyume'])
+                r_skor, m_skor, m2_skor = (100 if roe_val > 50 else roe_val * 2), (100 if m6_val > 100 else m6_val), (100 if m2_val > 50 else m2_val * 2)
+                eb_s, fb_s, sb_s = (100 if eb_val > 50 else (eb_val * 2 if eb_val > 0 else 0)), (100 if fb_val > 50 else (fb_val * 2 if fb_val > 0 else 0)), (100 if sb_val > 50 else (sb_val * 2 if sb_val > 0 else 0))
+                b_skor = (eb_s + fb_s + sb_s) / 3
+                
+                # Sütunları Başlat
+                c1, c2, c3 = st.columns(3)
 
-                with col1:
+                with c1:
                     st.markdown(f"#### 🏛️ Temel Analiz Kriterleri ({secilen_hisse})")
-                    st.write(f"- **ROE > TÜFE** ({float(th['ROE_0']):.2f} > {tufe_12:.2f}): {'✅ Geçti' if c_b else '❌ Kaldı'}")
-                    st.write(f"- **2A Getiri > XU100** ({float(th['Getiri_2a']):.2f} > {oto_2a:.2f}): {'✅ Geçti' if c_a else '❌ Kaldı'}")
-                    st.write(f"- **2H Getiri Şartı** ({float(th['Getiri_2h']):.2f} > {oto_2h - 10:.2f}): {'✅ Geçti' if c_ee else '❌ Kaldı'}")
-                    st.write(f"- **PD/DD < Sınır** ({float(th['PDDD']):.2f} < {p_lim:.2f}): {'✅ Geçti' if c_d else '❌ Kaldı'}")
-                    st.write(f"- **Net Borç / FAVÖK < 4** ({float(th['NetBorc_FAVOK']):.2f}): {'✅ Geçti' if c_c else '❌ Kaldı'}")
-                    st.write(f"- **Net Satış Büyümesi > 0** ({float(th['NetSatisBuyume']):.2f}): {'✅ Geçti' if c_f else '❌ Kaldı'}")
-                    st.write(f"- **Büyüme / Teyit Kriterleri:** {'✅ Geçti' if (c_g or c_h or c_teyit) else '❌ Kaldı'}")
-                    st.write(f"- **ROE Teyit Şartı:** {'✅ Geçti' if c_roe_t else '❌ Kaldı'}")
-                    st.write(f"- **1A Getiri > -15** ({float(th['Getiri_1a']):.2f}): {'✅ Geçti' if c_j else '❌ Kaldı'}")
-                    st.write(f"- **Halka Açıklık < 60** ({float(th['HAOran']):.2f}): {'✅ Geçti' if c_k else '❌ Kaldı'}")
+                    st.write(f"- ROE > TÜFE: {'✅ Geçti' if c_b else '❌ Kaldı'}")
+                    st.write(f"- 2A Getiri > XU100: {'✅ Geçti' if c_a else '❌ Kaldı'}")
+                    st.write(f"- 2H Getiri Şartı: {'✅ Geçti' if c_ee else '❌ Kaldı'}")
+                    st.write(f"- PD/DD < Sınır: {'✅ Geçti' if c_d else '❌ Kaldı'}")
+                    st.write(f"- Net Borç / FAVÖK < 4: {'✅ Geçti' if c_c else '❌ Kaldı'}")
+                    st.write(f"- Net Satış Büyümesi > 0: {'✅ Geçti' if c_f else '❌ Kaldı'}")
+                    st.write(f"- Büyüme / Teyit: {'✅ Geçti' if (c_g or c_h or c_teyit) else '❌ Kaldı'}")
+                    st.write(f"- ROE Teyit Şartı: {'✅ Geçti' if c_roe_t else '❌ Kaldı'}")
+                    st.write(f"- 1A Getiri > -15: {'✅ Geçti' if c_j else '❌ Kaldı'}")
+                    st.write(f"- Halka Açıklık < 60: {'✅ Geçti' if c_k else '❌ Kaldı'}")
 
-                with col2:
-                    st.markdown(f"#### 📈 Teknik Analiz & Skor Detayları ({secilen_hisse})")
-                    try:
-                        h_yf = yf.download(secilen_hisse + ".IS", period="1y", progress=False)
-                        if not h_yf.empty:
-                            h_yf = h_yf.sort_index().dropna()
-                            cls = h_yf['Close']
-                            if isinstance(cls, pd.DataFrame): cls = cls.iloc[:, 0]
-                            if len(cls) >= 200:
-                                m20 = float(cls.rolling(20).mean().iloc[-1])
-                                m75 = float(cls.rolling(75).mean().iloc[-1])
-                                m200 = float(cls.rolling(200).mean().iloc[-1])
-                                
-                                teknik_gecti = bool((m75 > m200) and (m20 > m75))
-                                if not teknik_gecti:
-                                    takilan_kriterler.append("Teknik MA Kuralı (MA75 > MA200 ve MA20 > MA75)")
+                with c2:
+                    st.markdown("#### 🎯 Hissenin Sıralama Skoru")
+                    # (Burada nihai_skor ve alt kalemlerini yazdır)
+                    # Basitçe nihai_skor değişkenini yukarıda hesaplayıp buraya yazdırabilirsin
+                    st.write(f"- ROE Katkısı: {(r_skor * 0.30):.2f}")
+                    st.write(f"- Büyüme Katkısı: {(b_skor * 0.20):.2f}")
+                    st.write(f"- Momentum Katkısı: {(m_skor * 0.15):.2f}")
 
-                                st.write(f"- **Güncel Kapanış:** {float(th['Kapanis']):.2f}")
-                                st.write(f"- **MA20:** {m20:.2f}")
-                                st.write(f"- **MA75:** {m75:.2f}")
-                                st.write(f"- **MA200:** {m200:.2f}")
-                                st.write(f"- **Teknik Kural (MA20 > MA75 > MA200):** {'✅ Sağlıyor' if teknik_gecti else '❌ Sağlamıyor'}")
-                                
-                                if takilan_kriterler:
-                                    uyari_mesaji = "Hisse aşağıdaki kriterleri sağlamadığı için filtrelerden geçemedi;\n"
-                                    for kriter in takilan_kriterler:
-                                        uyari_mesaji += f"\n- {kriter}"
-                                    st.warning(uyari_mesaji)
-                                else:
-                                    st.success('🎉 Tebrikler! Hisse tüm temel ve teknik filtrelerden başarıyla geçti.')
+                with c3:
+                    st.markdown(f"#### 📈 Teknik Analiz Detayları ({secilen_hisse})")
+                    h_yf = yf.download(secilen_hisse + ".IS", period="1y", progress=False)
+                    if not h_yf.empty:
+                        if isinstance(h_yf.columns, pd.MultiIndex): h_yf.columns = h_yf.columns.get_level_values(0)
+                        h_yf['MA20'], h_yf['MA75'] = h_yf['Close'].rolling(20).mean(), h_yf['Close'].rolling(75).mean()
+                        st.line_chart(h_yf[['Close', 'MA20', 'MA75']])
+                        
+                        m20, m75 = float(h_yf['MA20'].iloc[-1]), float(h_yf['MA75'].iloc[-1])
+                        st.write(f"- MA20: {m20:.2f} | MA75: {m75:.2f}")
+
+                # ALT KISIM: HATA LİSTESİ
+                if takilan_kriterler:
+                    st.markdown("---")
+                    st.warning("Hisse aşağıdaki kriterleri sağlamadığı için filtrelerden geçemedi;")
+                    for kriter in takilan_kriterler:
+                        st.write(f"• {kriter}")
+                else:
+                    st.success("🎉 Tebrikler! Hisse tüm filtrelerden başarıyla geçti.")
 
                                 roe_val = float(th['ROE_0'])
                                 m6_val = float(th['Getiri_6a'])
