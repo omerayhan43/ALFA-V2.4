@@ -3,7 +3,8 @@ import pandas as pd
 import numpy as np
 import datetime
 import yfinance as yf
-import altair as alt
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="ALFA V2.4 Borsa Algoritma Modeli", layout="wide")
@@ -157,22 +158,21 @@ if menu_secim == "📁 Veri Yönetimi (Excel Yükle)":
     else:
         st.info("👈 Lütfen her iki Excel dosyasını da yükleyin.")
 
-# --- 4. HAREKETLİ ORTALAMA İNCELEME PANELİ (BAĞIMSIZ ÇALIŞIR) ---
+# --- 4. HAREKETLİ ORTALAMA İNCELEME PANELİ (TRADINGVIEW FORMATI) ---
 elif menu_secim == "📈 Hareketli Ortalama İnceleme":
     st.markdown("### 📈 Hareketli Ortalama ve Trend İnceleme Paneli")
-    st.markdown("İstediğiniz hissenin fiyat hareketlerini ve MA20, MA75, MA200 ortalamalarını grafik üzerinde inceleyin.")
     
     if st.session_state.df_merged is not None:
         hisse_havuzu = sorted(st.session_state.df_merged["Kod"].dropna().astype(str).str.upper().unique().tolist())
     else:
-        hisse_havuzu = ["AKBNK", "ARCLK", "ASELS", "BIMAS", "CRDFA", "EGEGY", "EREGL", "FORTE", "GARAN", "KCHOL", "PETKM", "SAHOL", "SISE", "THYAO", "TUPRS"]
+        hisse_havuzu = ["A1CAP", "AKBNK", "ARCLK", "ASELS", "BIMAS", "CRDFA", "EGEGY", "EREGL", "FORTE", "GARAN", "KCHOL", "PETKM", "SAHOL", "SISE", "THYAO", "TUPRS"]
 
     hisse_listesi = [""] + hisse_havuzu
-    secilen_hisse = st.selectbox("Hisse Seçin / Arayın (Örn: CRDFA, EGEGY, THYAO):", options=hisse_listesi, key="ma_inceleme_select")
+    secilen_hisse = st.selectbox("Hisse Seçin / Arayın (Örn: A1CAP, CRDFA, THYAO):", options=hisse_listesi, key="ma_inceleme_select")
 
     if secilen_hisse:
         try:
-            with st.spinner(f"🔄 '{secilen_hisse}' için son 1 yıllık fiyat verileri ve hareketli ortalamalar hesaplanıyor..."):
+            with st.spinner(f"🔄 '{secilen_hisse}' TradingView grafik verileri hazırlanıyor..."):
                 h_yf = yf.download(secilen_hisse + ".IS", period="1y", progress=False)
                 
             if not h_yf.empty:
@@ -180,84 +180,122 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     h_yf.columns = h_yf.columns.get_level_values(0)
                 h_yf = h_yf.sort_index().dropna()
                 
+                op = h_yf['Open']
+                hi = h_yf['High']
+                lo = h_yf['Low']
                 cls = h_yf['Close']
+                vol = h_yf['Volume']
+                
+                if isinstance(op, pd.DataFrame): op = op.iloc[:, 0]
+                if isinstance(hi, pd.DataFrame): hi = hi.iloc[:, 0]
+                if isinstance(lo, pd.DataFrame): lo = lo.iloc[:, 0]
                 if isinstance(cls, pd.DataFrame): cls = cls.iloc[:, 0]
-                
+                if isinstance(vol, pd.DataFrame): vol = vol.iloc[:, 0]
+
                 # MA Hesaplamaları
-                h_yf['MA20'] = cls.rolling(20).mean()
-                h_yf['MA75'] = cls.rolling(75).mean()
-                h_yf['MA200'] = cls.rolling(200).mean()
+                ma20 = cls.rolling(20).mean()
+                ma75 = cls.rolling(75).mean()
+                ma200 = cls.rolling(200).mean()
                 
-                # Güncel Son Değerler
                 son_fiyat = float(cls.iloc[-1])
-                son_ma20 = float(h_yf['MA20'].iloc[-1]) if not pd.isna(h_yf['MA20'].iloc[-1]) else 0
-                son_ma75 = float(h_yf['MA75'].iloc[-1]) if not pd.isna(h_yf['MA75'].iloc[-1]) else 0
-                son_ma200 = float(h_yf['MA200'].iloc[-1]) if not pd.isna(h_yf['MA200'].iloc[-1]) else 0
+                son_ma20 = float(ma20.iloc[-1]) if not pd.isna(ma20.iloc[-1]) else 0
+                son_ma75 = float(ma75.iloc[-1]) if not pd.isna(ma75.iloc[-1]) else 0
+                son_ma200 = float(ma200.iloc[-1]) if not pd.isna(ma200.iloc[-1]) else 0
+                son_vol = float(vol.iloc[-1]) if not pd.isna(vol.iloc[-1]) else 0
                 
-                # 1. DEĞER KARTLARI (GRAFİĞİN TAM ÜSTÜNDE YAN YANA 4 SÜTUN)
-                st.markdown("#### 📊 Güncel Fiyat & MA Eşleşme Değerleri")
-                c_fiy, c_ma20, c_ma75, c_ma200 = st.columns(4)
+                # TradingView 2 Katmanlı Subplot (Üst: Mum + MA, Alt: Hacim)
+                fig = make_subplots(
+                    rows=2, cols=1, 
+                    shared_xaxes=True, 
+                    vertical_spacing=0.02, 
+                    row_heights=[0.80, 0.20]
+                )
                 
-                c_fiy.markdown(f"""
-                <div style="background-color: #e8f4f8; border-left: 5px solid #1f77b4; padding: 10px; border-radius: 5px;">
-                    <span style="font-size: 13px; color: #1f77b4; font-weight: bold;">Kapanış Fiyatı</span><br>
-                    <span style="font-size: 20px; font-weight: bold;">{son_fiyat:.2f} TL</span>
-                </div>
-                """, unsafe_allow_html=True)
+                # 1. Mum Grafiği
+                fig.add_trace(
+                    go.Candlestick(
+                        x=h_yf.index,
+                        open=op, high=hi, low=lo, close=cls,
+                        name='Fiyat',
+                        increasing_line_color='#089981', decreasing_line_color='#F23645',
+                        increasing_fillcolor='#089981', decreasing_fillcolor='#F23645'
+                    ),
+                    row=1, col=1
+                )
                 
-                c_ma20.markdown(f"""
-                <div style="background-color: #e0f7fa; border-left: 5px solid #17becf; padding: 10px; border-radius: 5px;">
-                    <span style="font-size: 13px; color: #00838f; font-weight: bold;">MA20 Değeri</span><br>
-                    <span style="font-size: 20px; font-weight: bold;">{son_ma20:.2f} TL</span>
-                </div>
-                """, unsafe_allow_html=True)
+                # 2. Hareketli Ortalamalar (Görseldekine Birebir Uygun Renkler)
+                fig.add_trace(go.Scatter(x=h_yf.index, y=ma20, mode='lines', name='MA 20', line=dict(color='#2962FF', width=2)), row=1, col=1)
+                fig.add_trace(go.Scatter(x=h_yf.index, y=ma75, mode='lines', name='MA 75', line=dict(color='#089981', width=2)), row=1, col=1)
+                fig.add_trace(go.Scatter(x=h_yf.index, y=ma200, mode='lines', name='MA 200', line=dict(color='#2A2E39', width=2)), row=1, col=1)
                 
-                c_ma75.markdown(f"""
-                <div style="background-color: #fff3e0; border-left: 5px solid #ff7f0e; padding: 10px; border-radius: 5px;">
-                    <span style="font-size: 13px; color: #e65100; font-weight: bold;">MA75 Değeri</span><br>
-                    <span style="font-size: 20px; font-weight: bold;">{son_ma75:.2f} TL</span>
-                </div>
-                """, unsafe_allow_html=True)
+                # 3. Hacim Barları (Yeşil / Kırmızı)
+                colors = ['#089981' if c >= o else '#F23645' for c, o in zip(cls, op)]
+                fig.add_trace(
+                    go.Bar(x=h_yf.index, y=vol, name='Hacim', marker_color=colors, opacity=0.6),
+                    row=2, col=1
+                )
                 
-                c_ma200.markdown(f"""
-                <div style="background-color: #ffebee; border-left: 5px solid #d62728; padding: 10px; border-radius: 5px;">
-                    <span style="font-size: 13px; color: #c62828; font-weight: bold;">MA200 Değeri</span><br>
-                    <span style="font-size: 20px; font-weight: bold;">{son_ma200:.2f} TL</span>
-                </div>
-                """, unsafe_allow_html=True)
+                # SAĞ Y-EKSENİ FİYAT ROZETLERİ (Çizgilerin hizasındaki renkli etiketler)
+                last_date = h_yf.index[-1]
                 
-                st.markdown("<br>", unsafe_allow_html=True)
+                def add_right_badge(fig_obj, y_val, text, bg_color):
+                    fig_obj.add_annotation(
+                        x=last_date, y=y_val,
+                        text=f" <b>{text}</b> ",
+                        showarrow=False,
+                        xref="x", yref="y",
+                        xanchor="left", yanchor="middle",
+                        bgcolor=bg_color,
+                        font=dict(color="white", size=11, family="Arial"),
+                        borderpad=3
+                    )
+
+                # Sağ Eksen Etiketleri Ekleme
+                price_color = "#089981" if cls.iloc[-1] >= op.iloc[-1] else "#F23645"
+                add_right_badge(fig, son_fiyat, f"{son_fiyat:.2f}", price_color)
+                if son_ma20: add_right_badge(fig, son_ma20, f"{son_ma20:.2f}", "#2962FF")
+                if son_ma75: add_right_badge(fig, son_ma75, f"{son_ma75:.2f}", "#089981")
+                if son_ma200: add_right_badge(fig, son_ma200, f"{son_ma200:.2f}", "#2A2E39")
                 
-                # 2. GRAFİK VERİ SETİ (Dinamik Y Ekseni - Dip Noktadan Başlama)
-                df_chart = pd.DataFrame({
-                    'Tarih': h_yf.index,
-                    'Kapanış (Fiyat)': cls.values,
-                    'MA20': h_yf['MA20'].values,
-                    'MA75': h_yf['MA75'].values,
-                    'MA200': h_yf['MA200'].values
-                })
+                # SOL ÜST GÖSTERGE LEJANDI (TradingView Formatı)
+                vol_str = f"{son_vol/1e6:.2f}M" if son_vol >= 1e6 else f"{son_vol/1e3:.2f}K"
+                info_html = (
+                    f"<b>{secilen_hisse} · 1G</b> &nbsp; <span style='color:gray;'>Hacim: {vol_str}</span><br>"
+                    f"<span style='color:#2962FF;'>MA 20 close 0: <b>{son_ma20:.2f}</b></span><br>"
+                    f"<span style='color:#089981;'>MA 75 close 0: <b>{son_ma75:.2f}</b></span><br>"
+                    f"<span style='color:#2A2E39;'>MA 200 close 0: <b>{son_ma200:.2f}</b></span>"
+                )
                 
-                df_melted = df_chart.melt('Tarih', var_name='Gösterge', value_name='Fiyat').dropna(subset=['Fiyat'])
+                fig.add_annotation(
+                    x=0.01, y=0.98,
+                    xref="paper", yref="paper",
+                    text=info_html,
+                    showarrow=False,
+                    align="left",
+                    bgcolor="rgba(255, 255, 255, 0.9)",
+                    bordercolor="#E0E0E0",
+                    borderwidth=1,
+                    font=dict(size=12, family="Arial")
+                )
                 
-                # Grafiğin 0'dan değil, en dip noktanın biraz altından başlamasını sağlama
-                min_val = float(df_melted['Fiyat'].min()) * 0.96
-                max_val = float(df_melted['Fiyat'].max()) * 1.04
+                # TRADINGVIEW BEYAZ TEMA & EKSEN DÜZENLEMELERİ
+                fig.update_layout(
+                    template="plotly_white",
+                    height=650,
+                    margin=dict(l=10, r=80, t=10, b=10),
+                    xaxis_rangeslider_visible=False,
+                    showlegend=False,
+                    hovermode="x unified",
+                    plot_bgcolor="#FFFFFF",
+                    paper_bgcolor="#FFFFFF"
+                )
                 
-                chart = alt.Chart(df_melted).mark_line().encode(
-                    x=alt.X('Tarih:T', title='Tarih', axis=alt.Axis(format='%b %Y')),
-                    y=alt.Y('Fiyat:Q', title='Fiyat (TL)', scale=alt.Scale(domain=[min_val, max_val], zero=False)),
-                    color=alt.Color('Gösterge:N', 
-                                  scale=alt.Scale(
-                                      domain=['Kapanış (Fiyat)', 'MA20', 'MA75', 'MA200'],
-                                      range=['#1f77b4', '#17becf', '#ff7f0e', '#d62728']
-                                  ),
-                                  legend=alt.Legend(orient='bottom', title=None)),
-                    tooltip=['Tarih:T', 'Gösterge:N', alt.Tooltip('Fiyat:Q', format='.2f')]
-                ).properties(
-                    height=500
-                ).interactive()
+                # Sağ eksen yapılandırması
+                fig.update_yaxes(side="right", tickformat=".2f", gridcolor="#F0F0F0", row=1, col=1, autorange=True)
+                fig.update_yaxes(side="right", gridcolor="#F0F0F0", row=2, col=1)
+                fig.update_xaxes(gridcolor="#F0F0F0")
                 
-                st.altair_chart(chart, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True)
                 
             else:
                 st.warning("Yahoo Finance üzerinden bu hisse için fiyat verisi çekilemedi.")
