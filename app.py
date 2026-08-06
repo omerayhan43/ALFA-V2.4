@@ -265,14 +265,16 @@ if file1 and file2:
                                 st.write(f"- **MA200:** {m200:.2f}")
                                 st.write(f"- **Teknik Kural (MA20 > MA75 > MA200):** {'✅ Sağlıyor' if teknik_gecti else '❌ Sağlamıyor'}")
                                 
-                                # Uyarı Mesajı Gösterimi
+                                # Uyarı Mesajı Gösterimi (İstediğin Format: Alt alta tire ile)
                                 if takilan_kriterler:
-                                    takilanlar_str = ", ".join(takilan_kriterler)
-                                    st.warning(f'⚠️ Uyarı: Hisse "{takilanlar_str}" kriterini veya kriterlerini sağlamadığı için filtreden geçemedi.')
+                                    uyari_mesaji = "Hisse aşağıdaki kriterleri sağlamadığı için filtrelerden geçemedi;\n"
+                                    for kriter in takilan_kriterler:
+                                        uyari_mesaji += f"\n- {kriter}"
+                                    st.warning(uyari_mesaji)
                                 else:
-                                    st.success('🎉 Tebrikler! Hisse tüm temel dan teknik filtrelerden başarıyla geçti.')
+                                    st.success('🎉 Tebrikler! Hisse tüm temel ve teknik filtrelerden başarıyla geçti.')
 
-                                # Skor Hesaplama Detayı (Güvenli Tip Dönüşümleriyle)
+                                # Skor Hesaplama Detayı
                                 roe_val = float(th['ROE_0'])
                                 m6_val = float(th['Getiri_6a'])
                                 m2_val = float(th['Getiri_2a'])
