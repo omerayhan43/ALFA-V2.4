@@ -415,20 +415,28 @@ if st.session_state.df_merged is not None:
 else:
     if menu_secim != "📁 Veri Yönetimi (Excel Yükle)":
         st.warning("👈 Lütfen sol menüden **'📁 Veri Yönetimi (Excel Yükle)'** seçeneğine tıklayarak dosyalarınızı yükleyin.")
-    # --- YENİ: HAREKETLİ ORTALAMA İNCELEME PANELİ ---
+# --- YENİ: HAREKETLİ ORTALAMA İNCELEME PANELİ (Bağımsız Çalışır) ---
     elif menu_secim == "📈 Hareketli Ortalama İnceleme":
         st.markdown("### 📈 Hareketli Ortalama ve Trend İnceleme Paneli")
         st.markdown("İstediğiniz hissenin fiyat hareketlerini ve MA20, MA75, MA200 ortalamalarını renkli, interaktif bir grafik üzerinde inceleyin.")
         
-        # Anlık arama selectbox
-        hisse_listesi = [""] + sorted(df["Kod"].dropna().astype(str).str.upper().unique().tolist())
-        secilen_hisse = st.selectbox("İncelenecek Hisseyi Seçin:", options=hisse_listesi, key="ma_inceleme_select")
+        # Eğer hafızada Excel verisi varsa oradaki listeyi kullan, yoksa popüler bir kaç hisse ile alternatif sun veya tüm BIST listesini Yahoo'dan al
+        hisse_havuzu = []
+        if st.session_state.df_merged is not None:
+            hisse_havuzu = sorted(st.session_state.df_merged["Kod"].dropna().astype(str).str.upper().unique().tolist())
+        else:
+            hisse_havuzu = ["THYAO", "GARAN", "EREGL", "AKBNK", "KCHOL", "SISE", "BIMAS", "ASELS", "TUPRS", "PETKM"]
+
+        hisse_listesi = [""] + hisse_havuzu
+        secilen_hisse = st.selectbox("İncelenecek Hisseyi Seçin veya Kod Yazın:", options=hisse_listesi, key="ma_inceleme_select")
 
         if secilen_hisse:
             try:
                 import plotly.graph_objects as go
                 
-                h_yf = yf.download(secilen_hisse + ".IS", period="1y", progress=False)
+                with st.spinner(f"{secilen_hisse} için fiyat verileri ve hareketli ortalamalar hesaplanıyor..."):
+                    h_yf = yf.download(secilen_hisse + ".IS", period="1y", progress=False)
+                    
                 if not h_yf.empty:
                     if isinstance(h_yf.columns, pd.MultiIndex):
                         h_yf.columns = h_yf.columns.get_level_values(0)
@@ -460,7 +468,7 @@ else:
                         xaxis_title="Tarih",
                         yaxis_title="Fiyat (TL)",
                         height=550,
-                        hovermode="x unified", # Fareyi gezdirdiğinizde tüm değerleri tek kutuda gösterir
+                        hovermode="x unified",
                         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                     )
                     
@@ -483,4 +491,3 @@ else:
                     st.warning("Yahoo Finance üzerinden bu hisse için veri bulunamadı.")
             except Exception as e:
                 st.error(f"Grafik yüklenirken bir hata oluştu: {e}")
-                st.info("İpucu: Plotly kütüphanesinin aktif olduğundan emin olun.")
