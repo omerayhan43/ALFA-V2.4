@@ -7,6 +7,28 @@ import yfinance as yf
 # Sayfa Yapılandırması
 st.set_page_config(page_title="ALFA V2.4 Borsa Algoritma Modeli", layout="wide")
 
+# --- ÖZGÜN SOL MENÜ & MOUSE POINTER (EL İŞARETİ) CSS STİLİ ---
+st.markdown(
+    """
+    <style>
+    /* Radio butonları ve seçim alanlarını gizle / özgünleştir, üstüne gelince el işareti yap */
+    .custom-nav-item {
+        padding: 10px 15px;
+        margin-bottom: 5px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+        color: #31333F;
+        transition: background 0.2s;
+    }
+    .custom-nav-item:hover {
+        background-color: #f0f2f6;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # --- 1. OTOMATİK XU100 ENDEKS & MAKRO GİRDİLERİ (ARKA PLAN) ---
 @st.cache_data(ttl=3600)
 def otomatik_makro_veriler():
@@ -54,13 +76,13 @@ with header_col2:
 
 st.markdown("---")
 
-# --- 2. SOL MENÜ (FİNTABLES TARZI PROFESYONEL NAVİGASYON) ---
-st.sidebar.markdown("### 🔴 Fintables")
+# --- 2. SOL MENÜ (ÖZGÜN NAVİGASYON) ---
+st.sidebar.markdown("### ⚡ ALFA Terminal")
 st.sidebar.markdown("---")
 
 menu_secim = st.sidebar.radio(
     "Navigasyon",
-    ["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli", "📁 Fintables Veri Yükleme"],
+    ["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli", "📁 Veri Yönetimi (Excel Yükle)"],
     label_visibility="collapsed"
 )
 
@@ -68,71 +90,81 @@ st.sidebar.markdown("---")
 st.sidebar.markdown(
     """
     <div style="font-size: 12px; color: #6c757d;">
-        <b>Hızlı Menü</b><br>
-        • Hissecim Modülü<br>
-        • VİOP / Kripto (Yakında)<br>
-        • Sektörler & Analizler
+        <b>Sistem Bilgisi</b><br>
+        • Sürüm: ALFA V2.4<br>
+        • Veri Kaynağı: Fintables & yfinance<br>
+        • Durum: Aktif
     </div>
     """,
     unsafe_allow_html=True
 )
 
-# Dosya yüklemelerini oturumda saklamak için session_state kullanımı
-if "file1" not in st.session_state:
-    st.session_state.file1 = None
-if "file2" not in st.session_state:
-    st.session_state.file2 = None
+# --- SESSION STATE İLE DOSYA VE VERİ KALICILIĞI ---
+if "df_merged" not in st.session_state:
+    st.session_state.df_merged = None
+if "file1_name" not in st.session_state:
+    st.session_state.file1_name = None
+if "file2_name" not in st.session_state:
+    st.session_state.file2_name = None
 
-# --- 3. VERİ YÜKLEME EKRANI (KATEGORİ SEÇİLDİĞİNDE AÇILIR) ---
-if menu_secim == "📁 Fintables Veri Yükleme":
+# --- 3. VERİ YÖNETİMİ VE DOSYA YÜKLEME EKRANI ---
+if menu_secim == "📁 Veri Yönetimi (Excel Yükle)":
     st.subheader("📁 Fintables Veri Yönetimi ve Excel Yükleme")
-    st.markdown("Modelin tarama yapabilmesi için güncel Fintables Excel dosyalarınızı aşağıya yükleyin.")
+    st.markdown("Modelin tarama yapabilmesi için güncel Fintables Excel dosyalarınızı aşağıya yükleyin. Yüklediğiniz dosyalar sekmeler arasında gezindiğinizde **asla silinmez**.")
     
     col_up1, col_up2 = st.columns(2)
     with col_up1:
-        st.session_state.file1 = st.file_uploader("1. Temel Analiz & Fiyat Dosyası", type=["xlsx", "xls"], key="f1")
+        f1 = st.file_uploader("1. Temel Analiz & Fiyat Dosyası", type=["xlsx", "xls"], key="uploader_f1")
     with col_up2:
-        st.session_state.file2 = st.file_uploader("2. Eski Dönemler Dosyası (1)", type=["xlsx", "xls"], key="f2")
+        f2 = st.file_uploader("2. Eski Dönemler Dosyası (1)", type=["xlsx", "xls"], key="uploader_f2")
 
-    if st.session_state.file1 and st.session_state.file2:
-        st.success("✅ Excel dosyaları başarıyla yüklendi! Sol menüden **'📊 Radar & Taramalar'** sekmesine geçerek tarama sonuçlarını inceleyebilirsiniz.")
+    if f1 is not None:
+        st.session_state.file1_name = f1
+    if f2 is not None:
+        st.session_state.file2_name = f2
+
+    if st.session_state.file1_name and st.session_state.file2_name:
+        try:
+            df1 = pd.read_excel(st.session_state.file1_name).iloc[:, :23]
+            df1.columns = [
+                "Kod", "ROE_0", "ROE_1", "ROE_4", "BrutEFK_0", "BrutEFK_1", 
+                "EFK_0", "EFK_1", "EFK_4", "FAVOK_0", "FAVOK_1", 
+                "NetSatisBuyume", "FAVOKBuyume", "BrutEFKBuyume", "EFKBuyume", 
+                "PDDD", "NetBorc_FAVOK", "HAOran", "Getiri_2h", "Getiri_1a", 
+                "Getiri_2a", "Getiri_6a", "Kapanis"
+            ]
+
+            df2 = pd.read_excel(st.session_state.file2_name).iloc[:, :7]
+            df2.columns = ["Kod", "ROE_2", "BrutEFK_2", "EFK_2", "FAVOK_2", "ROE_5", "EFK_5"]
+
+            df = pd.merge(df1, df2, on="Kod", how="left").fillna(0)
+
+            bilanco_gelmedi = (
+                (df["BrutEFK_0"] == df["BrutEFK_1"]) & 
+                (df["EFK_0"] == df["EFK_1"]) & 
+                (df["FAVOK_0"] == df["FAVOK_1"]) & 
+                ((df["BrutEFK_0"] != 0) | (df["EFK_0"] != 0) | (df["FAVOK_0"] != 0))
+            )
+
+            df["Bilanco_Durum"] = np.where(bilanco_gelmedi, "GELMEDİ (Eski)", "GELDİ (Yeni)")
+
+            df["ef_EFK_1"] = np.where(bilanco_gelmedi, np.where(df["EFK_2"] != 0, df["EFK_2"], df["EFK_1"]), df["EFK_1"])
+            df["ef_EFK_4"] = np.where(bilanco_gelmedi, np.where(df["EFK_5"] != 0, df["EFK_5"], df["EFK_4"]), df["EFK_4"])
+            df["ef_FAVOK_1"] = np.where(bilanco_gelmedi, np.where(df["FAVOK_2"] != 0, df["FAVOK_2"], df["FAVOK_1"]), df["FAVOK_1"])
+            df["ef_BrutEFK_1"] = np.where(bilanco_gelmedi, np.where(df["BrutEFK_2"] != 0, df["BrutEFK_2"], df["BrutEFK_1"]), df["BrutEFK_1"])
+            df["ef_ROE_1"] = np.where(bilanco_gelmedi, np.where(df["ROE_2"] != 0, df["ROE_2"], df["ROE_1"]), df["ROE_1"])
+            df["ef_ROE_4"] = np.where(bilanco_gelmedi, np.where(df["ROE_5"] != 0, df["ROE_5"], df["ROE_4"]), df["ROE_4"])
+
+            st.session_state.df_merged = df
+            st.success("✅ Excel dosyaları başarıyla işlendi ve hafızaya kaydedildi! Sol menüden **'📊 Radar & Taramalar'** sekmesine geçebilirsiniz.")
+        except Exception as e:
+            st.error(f"Dosyalar işlenirken hata oluştu: {e}")
     else:
-        st.info("👈 Lütfen her iki dosyayı da yükleyin.")
+        st.info("👈 Lütfen her iki Excel dosyasını da yükleyin.")
 
-# Dosyalar hafızadaysa işlemleri devam ettir
-file1 = st.session_state.file1
-file2 = st.session_state.file2
-
-if file1 and file2:
-    df1 = pd.read_excel(file1).iloc[:, :23]
-    df1.columns = [
-        "Kod", "ROE_0", "ROE_1", "ROE_4", "BrutEFK_0", "BrutEFK_1", 
-        "EFK_0", "EFK_1", "EFK_4", "FAVOK_0", "FAVOK_1", 
-        "NetSatisBuyume", "FAVOKBuyume", "BrutEFKBuyume", "EFKBuyume", 
-        "PDDD", "NetBorc_FAVOK", "HAOran", "Getiri_2h", "Getiri_1a", 
-        "Getiri_2a", "Getiri_6a", "Kapanis"
-    ]
-
-    df2 = pd.read_excel(file2).iloc[:, :7]
-    df2.columns = ["Kod", "ROE_2", "BrutEFK_2", "EFK_2", "FAVOK_2", "ROE_5", "EFK_5"]
-
-    df = pd.merge(df1, df2, on="Kod", how="left").fillna(0)
-
-    bilanco_gelmedi = (
-        (df["BrutEFK_0"] == df["BrutEFK_1"]) & 
-        (df["EFK_0"] == df["EFK_1"]) & 
-        (df["FAVOK_0"] == df["FAVOK_1"]) & 
-        ((df["BrutEFK_0"] != 0) | (df["EFK_0"] != 0) | (df["FAVOK_0"] != 0))
-    )
-
-    df["Bilanco_Durum"] = np.where(bilanco_gelmedi, "GELMEDİ (Eski)", "GELDİ (Yeni)")
-
-    df["ef_EFK_1"] = np.where(bilanco_gelmedi, np.where(df["EFK_2"] != 0, df["EFK_2"], df["EFK_1"]), df["EFK_1"])
-    df["ef_EFK_4"] = np.where(bilanco_gelmedi, np.where(df["EFK_5"] != 0, df["EFK_5"], df["EFK_4"]), df["EFK_4"])
-    df["ef_FAVOK_1"] = np.where(bilanco_gelmedi, np.where(df["FAVOK_2"] != 0, df["FAVOK_2"], df["FAVOK_1"]), df["FAVOK_1"])
-    df["ef_BrutEFK_1"] = np.where(bilanco_gelmedi, np.where(df["BrutEFK_2"] != 0, df["BrutEFK_2"], df["BrutEFK_1"]), df["BrutEFK_1"])
-    df["ef_ROE_1"] = np.where(bilanco_gelmedi, np.where(df["ROE_2"] != 0, df["ROE_2"], df["ROE_1"]), df["ROE_1"])
-    df["ef_ROE_4"] = np.where(bilanco_gelmedi, np.where(df["ROE_5"] != 0, df["ROE_5"], df["ROE_4"]), df["ROE_4"])
+# Hafızada veri varsa diğer sekmeler aktif çalışır
+if st.session_state.df_merged is not None:
+    df = st.session_state.df_merged
 
     # --- TEMEL KRİTERLER (FİLTRELEME) ---
     df["pdddLimit"] = np.where(df["ROE_0"] > 90, 8 + (df["ROE_0"] - 90) * 0.07, 8)
@@ -157,7 +189,6 @@ if file1 and file2:
 
     # --- 4. RADAR & TARAMALAR EKRANI ---
     if menu_secim == "📊 Radar & Taramalar":
-        # ARKA PLAN TEKNİK VERİLERİNİ ÇEKME
         teknik_asanadan_gecenler = []
         if len(df_temel) > 0:
             with st.spinner("🔄 Temelden geçen hisselerin hareketli ortalamaları (MA20, MA75, MA200) anlık çekiliyor..."):
@@ -183,7 +214,7 @@ if file1 and file2:
 
         df_teknik = df_temel.loc[teknik_asanadan_gecenler].copy()
 
-        # --- MODERN METRİK KARTLARI (KPIs) ---
+        # Modern Metrik Kartları
         m1, m2, m3 = st.columns(3)
         m1.metric(label="📊 Toplam İncelenen", value=f"{len(df)} Hisse")
         m2.metric(label="🏛️ Temel Filtreyi Geçen", value=f"{len(df_temel)} Hisse")
@@ -225,7 +256,6 @@ if file1 and file2:
                 df_sonuc = df_teknik.sort_values(by="SKOR", ascending=False).reset_index(drop=True)
                 df_sonuc.index += 1
 
-                # --- NİHAİ PORTFÖY ADAYLARI ---
                 st.markdown("### 🏆 Nihai Portföy Adayları (En İyi Skorlar)")
                 def highlight_top5(s):
                     return ['background-color: #d4edda; font-weight: bold;' if s.name <= 5 else '' for _ in s]
@@ -242,7 +272,6 @@ if file1 and file2:
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # --- ARKA PLAN DETAY TABLOLARI (AKORDEON) ---
             with st.expander("📋 Arka Plan Verileri: Temel Kriterleri Geçen Tüm Hisseler"):
                 st.dataframe(
                     df_temel[["Kod", "Bilanco_Durum", "ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"]]
@@ -273,7 +302,6 @@ if file1 and file2:
                 th = tek_hisse_df.iloc[0]
                 p_lim = float(8 + (th['ROE_0'] - 90) * 0.07 if th['ROE_0'] > 90 else 8)
                 
-                # Temel Kurallar Kontrolü
                 c_a = bool(th['Getiri_2a'] > oto_2a)
                 c_b = bool(th['ROE_0'] > tufe_12)
                 c_c = bool(th['NetBorc_FAVOK'] < 4)
@@ -287,8 +315,6 @@ if file1 and file2:
                 c_teyit = bool((th['EFK_0'] >= th['ef_EFK_1']) or (th['EFK_0'] >= th['ef_EFK_4']))
                 c_roe_t = bool((th['ROE_0'] >= th['ef_ROE_1']) or (th['ROE_0'] >= th['ef_ROE_4']))
                 
-                temel_gecti = secilen_hisse in df_temel['Kod'].values
-
                 takilan_kriterler = []
                 if not c_b: takilan_kriterler.append("ROE > TÜFE")
                 if not c_a: takilan_kriterler.append("2A Getiri > XU100")
@@ -402,5 +428,5 @@ if file1 and file2:
             else:
                 st.warning(f"'{secilen_hisse}' kodlu hisse Fintables dosyalarında bulunamadı.")
 else:
-    if menu_secim != "📁 Fintables Veri Yükleme":
-        st.info("👈 Lütfen sol menüden **'📁 Fintables Veri Yükleme'** seçeneğine tıklayarak Excel dosyalarınızı yükleyin.")
+    if menu_secim != "📁 Veri Yönetimi (Excel Yükle)":
+        st.warning("⚠️ Henüz Fintables Excel dosyaları yüklenmemiş. Lütfen sol menüden **'📁 Veri Yönetimi (Excel Yükle)'** seçeneğine tıklayarak dosyalarınızı yükleyin.")
