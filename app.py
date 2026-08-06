@@ -110,18 +110,10 @@ if file1 and file2:
     tab1, tab2 = st.tabs(["📊 Portföy ve Tarama Sonuçları", "🔍 Detaylı Hisse Teşhis Paneli"])
 
     with tab1:
-        st.success(f"Toplam {len(df)} hisse içerisinden Temel Kriterleri geçen toplam hisse sayısı: **{len(df_temel)}**")
-
+        # ARKA PLAN TEKNİK VERİLERİNİ ÇEKME (Önden Çalıştırılır)
+        teknik_asanadan_gecenler = []
         if len(df_temel) > 0:
-            st.markdown("### 📋 Temel Kriterleri Geçen Tüm Hisseler")
-            st.dataframe(
-                df_temel[["Kod", "Bilanco_Durum", "ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"]]
-                .style.format(precision=2, subset=["ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"])
-            )
-
-            # Dinamik Spinner ve Onay Mesajı
-            teknik_asanadan_gecenler = []
-            with st.spinner("🔄 Temelden geçen tüm hisselerin hareketli ortalamaları (MA20, MA75, MA200) anlık çekiliyor..."):
+            with st.spinner("🔄 Temelden geçen hisselerin hareketli ortalamaları (MA20, MA75, MA200) anlık çekiliyor..."):
                 for idx, row in df_temel.iterrows():
                     kod = str(row["Kod"]).strip() + ".IS"
                     try:
@@ -141,17 +133,18 @@ if file1 and file2:
                                     teknik_asanadan_gecenler.append(idx)
                     except:
                         continue
-            
-            st.success("✅ MA verileri başarıyla çekildi.")
 
-            df_teknik = df_temel.loc[teknik_asanadan_gecenler].copy()
-            
-            st.markdown("### 🔍 MA Karşılaştırma Tablosu")
-            st.dataframe(
-                df_temel[["Kod", "Kapanis", "MA20", "MA75", "MA200", "Bilanco_Durum"]]
-                .style.format(precision=2, subset=["Kapanis", "MA20", "MA75", "MA200"])
-            )
+        df_teknik = df_temel.loc[teknik_asanadan_gecenler].copy()
 
+        # --- MODERN METRİK KARTLARI (KPIs) ---
+        m1, m2, m3 = st.columns(3)
+        m1.metric(label="📊 Toplam İncelenen", value=f"{len(df)} Hisse")
+        m2.metric(label="🏛️ Temel Filtreyi Geçen", value=f"{len(df_temel)} Hisse")
+        m3.metric(label="🏆 Teknik & Trendi Geçen (Adaylar)", value=f"{len(df_teknik)} Hisse")
+        
+        st.markdown("---")
+
+        if len(df_temel) > 0:
             if len(df_teknik) > 0:
                 roe = df_teknik["ROE_0"]
                 m6 = df_teknik["Getiri_6a"]
@@ -185,7 +178,8 @@ if file1 and file2:
                 df_sonuc = df_teknik.sort_values(by="SKOR", ascending=False).reset_index(drop=True)
                 df_sonuc.index += 1
 
-                st.markdown("### 🏆 Nihai Portföy Adayları (İlk 5 Hisse)")
+                # --- 1. ANA ÇIKTI: NİHAİ PORTFÖY ADAYLARI (EN ÜSTTE) ---
+                st.markdown("### 🏆 Nihai Portföy Adayları (En İyi Skorlar)")
                 def highlight_top5(s):
                     return ['background-color: #d4edda; font-weight: bold;' if s.name <= 5 else '' for _ in s]
                 
@@ -193,10 +187,29 @@ if file1 and file2:
                     df_sonuc[["Kod", "SKOR", "Bilanco_Durum", "ROE_0", "PDDD", "Getiri_1a", "Getiri_6a"]]
                     .head(15)
                     .style.format(precision=2, subset=["SKOR", "ROE_0", "PDDD", "Getiri_1a", "Getiri_6a"])
-                    .apply(highlight_top5, axis=1)
+                    .apply(highlight_top5, axis=1),
+                    use_container_width=True
                 )
             else:
-                st.warning("Teknik kriterleri sağlayan hisse bulunamadı.")
+                st.warning("Teknik kriterleri (MA20 > MA75 > MA200) sağlayan hisse bulunamadı.")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # --- 2. DETAY TABLOLARI (AKORDEON İÇİNDE - GÖZ YORMASIN) ---
+            with st.expander("📋 Arka Plan Verileri: Temel Kriterleri Geçen Tüm Hisseler"):
+                st.dataframe(
+                    df_temel[["Kod", "Bilanco_Durum", "ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"]]
+                    .style.format(precision=2, subset=["ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"]),
+                    use_container_width=True
+                )
+
+            with st.expander("🔍 Arka Plan Verileri: MA Karşılaştırma Tablosu"):
+                st.success("✅ MA verileri başarıyla çekildi.")
+                st.dataframe(
+                    df_temel[["Kod", "Kapanis", "MA20", "MA75", "MA200", "Bilanco_Durum"]]
+                    .style.format(precision=2, subset=["Kapanis", "MA20", "MA75", "MA200"]),
+                    use_container_width=True
+                )
         else:
             st.warning("Temel kriterleri sağlayan hisse bulunamadı.")
 
@@ -286,7 +299,7 @@ if file1 and file2:
                                         uyari_mesaji += f"\n- {kriter}"
                                     st.warning(uyari_mesaji)
                                 else:
-                                    st.success('🎉 Tebrikler! Hisse tüm temel ve teknik filtrelerden başarıyla geçti.')
+                                    st.success('🎉 Tebrikler! Hisse tüm temel dan teknik filtrelerden başarıyla geçti.')
 
                                 # Skor Hesaplama Detayı
                                 roe_val = float(th['ROE_0'])
