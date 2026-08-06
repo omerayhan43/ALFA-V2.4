@@ -7,25 +7,7 @@ import yfinance as yf
 # Sayfa Yapılandırması
 st.set_page_config(page_title="ALFA Terminal", layout="wide")
 
-# --- ÖZGÜN CSS (Pointer İşareti ve Modern Navigasyon) ---
-st.markdown(
-    """
-    <style>
-    /* Radio butonlarını özelleştir ve el işareti yap */
-    div[role="radiogroup"] > label {
-        cursor: pointer !important;
-        padding: 10px;
-        border-radius: 5px;
-    }
-    div[role="radiogroup"] > label:hover {
-        background-color: #f0f2f6;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# --- ARKA PLAN VERİLERİ (Caching) ---
+# --- 1. OTOMATİK XU100 ENDEKS (ARKA PLAN) ---
 @st.cache_data(ttl=3600)
 def get_makro_data():
     try:
@@ -36,7 +18,6 @@ def get_makro_data():
         day_t = df.index.asof(bugun)
         day_t2w = df.index.asof(bugun - pd.Timedelta(days=14))
         day_t2m = df.index.asof(bugun - pd.Timedelta(days=60))
-        
         get_p = lambda d: float(df.loc[d]['Close'].iloc[0] if isinstance(df.loc[d]['Close'], pd.Series) else df.loc[d]['Close'])
         price_today, price_t2w, price_t2m = get_p(day_t), get_p(day_t2w), get_p(day_t2m)
         return 31.75, ((price_today - price_t2w) / price_t2w) * 100, ((price_today - price_t2m) / price_t2m) * 100
@@ -44,14 +25,14 @@ def get_makro_data():
 
 tufe, oto_2h, oto_2a = get_makro_data()
 
-# --- SESSION STATE ---
+# --- SESSION STATE (Veri Kalıcılığı İçin) ---
 if "df" not in st.session_state: st.session_state.df = None
 if "upload_time" not in st.session_state: st.session_state.upload_time = None
 
-# --- HEADER ---
+# --- HEADER & MAKRO GÖSTERİMİ ---
 col_h1, col_h2 = st.columns([3, 1])
 with col_h1:
-    st.title("📈 BIST Algoritmik Hisse Seçim Modeli")
+    st.title("📈 BIST Algoritmik Hisse Seçim Modeli (ALFA V2.4)")
 with col_h2:
     if st.session_state.upload_time:
         st.markdown(f"**Veri Yüklenme Zamanı:**<br>{st.session_state.upload_time}", unsafe_allow_html=True)
@@ -60,11 +41,10 @@ with col_h2:
 st.markdown("---")
 
 # --- SOL MENÜ ---
-st.sidebar.markdown("### ⚡ ALFA Terminal")
-menu = st.sidebar.radio("Navigasyon", ["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli", "📁 Veri Yönetimi (Excel Yükle)"], label_visibility="collapsed")
+menu = st.sidebar.radio("Navigasyon", ["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli", "📁 Veri Yönetimi (Excel Yükle)"])
 
-# --- VERİ İŞLEME MANTIĞI (Her zaman çalışır) ---
-def process_files(f1, f2):
+# --- VERİ İŞLEME FONKSİYONU ---
+def process_data(f1, f2):
     df1 = pd.read_excel(f1).iloc[:, :23]
     df1.columns = ["Kod", "ROE_0", "ROE_1", "ROE_4", "BrutEFK_0", "BrutEFK_1", "EFK_0", "EFK_1", "EFK_4", "FAVOK_0", "FAVOK_1", "NetSatisBuyume", "FAVOKBuyume", "BrutEFKBuyume", "EFKBuyume", "PDDD", "NetBorc_FAVOK", "HAOran", "Getiri_2h", "Getiri_1a", "Getiri_2a", "Getiri_6a", "Kapanis"]
     df2 = pd.read_excel(f2).iloc[:, :7]
@@ -75,38 +55,36 @@ def process_files(f1, f2):
 
 # --- SEKME İÇERİKLERİ ---
 if menu == "📁 Veri Yönetimi (Excel Yükle)":
-    st.header("📁 Veri Yönetimi")
-    c1, c2 = st.columns(2)
-    f1 = c1.file_uploader("Temel Analiz Dosyası", type=["xlsx"])
-    f2 = c2.file_uploader("Eski Dönemler Dosyası", type=["xlsx"])
+    st.header("📁 Fintables Veri Yönetimi")
+    f1 = st.file_uploader("1. Temel Analiz & Fiyat Dosyası", type=["xlsx", "xls"])
+    f2 = st.file_uploader("2. Eski Dönemler Dosyası (1)", type=["xlsx", "xls"])
     
     if f1 and f2:
-        if st.button("🚀 Verileri İşle"):
-            st.session_state.df = process_files(f1, f2)
+        if st.button("🚀 Verileri İşle ve Kaydet"):
+            st.session_state.df = process_data(f1, f2)
             st.session_state.upload_time = datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-            st.success("Veriler hafızaya alındı!")
+            st.success("✅ Veriler hafızaya alındı! Diğer sekmelere geçebilirsin.")
 
 elif menu == "📊 Radar & Taramalar":
+    st.header("📊 Radar & Taramalar")
     if st.session_state.df is not None:
         df = st.session_state.df
-        # Filtreleme (Örnek)
         df["pdddLimit"] = np.where(df["ROE_0"] > 90, 8 + (df["ROE_0"] - 90) * 0.07, 8)
         filtreliler = (df["Getiri_2a"] > oto_2a) & (df["ROE_0"] > tufe)
         df_temel = df[filtreliler].copy()
         
-        st.metric("Temel Filtreyi Geçen", f"{len(df_temel)} Hisse")
-        st.dataframe(df_temel.head(10).style.format(precision=2), use_container_width=True)
+        st.markdown(f"### Temel Filtreyi Geçen {len(df_temel)} Hisse")
+        st.dataframe(df_temel.style.format(precision=2), use_container_width=True)
     else:
-        st.warning("Henüz veri yüklenmemiş. 'Veri Yönetimi' sekmesinden dosyaları yükleyin.")
+        st.warning("⚠️ Lütfen önce 'Veri Yönetimi' sekmesinden Excel dosyalarını yükleyip işleyin.")
 
 elif menu == "🔍 Hisse Teşhis Paneli":
+    st.header("🔍 Hisse Teşhis Paneli")
     if st.session_state.df is not None:
-        kod = st.text_input("Hisse Kodu Girin (Örn: ATATP)").upper()
+        kod = st.text_input("Hisse Kodu Girin").upper()
         if kod:
             res = st.session_state.df[st.session_state.df["Kod"] == kod]
-            if not res.empty:
-                st.write(res.T)
-            else:
-                st.error("Hisse bulunamadı.")
+            if not res.empty: st.write(res.T)
+            else: st.error("Hisse bulunamadı.")
     else:
-        st.warning("Veri bulunamadı.")
+        st.warning("⚠️ Lütfen önce 'Veri Yönetimi' sekmesinden Excel dosyalarını yükleyin.")
