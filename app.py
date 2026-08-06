@@ -119,7 +119,7 @@ if file1 and file2:
                 .style.format(precision=2, subset=["ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"])
             )
 
-            # Dinamik Durum Çubuğu (Spinner & Success)
+            # Dinamik Spinner ve Onay Mesajı
             teknik_asanadan_gecenler = []
             with st.spinner("🔄 Temelden geçen tüm hisselerin hareketli ortalamaları (MA20, MA75, MA200) anlık çekiliyor..."):
                 for idx, row in df_temel.iterrows():
@@ -142,7 +142,7 @@ if file1 and file2:
                     except:
                         continue
             
-            st.success("✅ Veriler başarıyla çekildi.")
+            st.success("✅ MA verileri başarıyla çekildi.")
 
             df_teknik = df_temel.loc[teknik_asanadan_gecenler].copy()
             
