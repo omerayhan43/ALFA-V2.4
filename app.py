@@ -57,10 +57,26 @@ def otomatik_makro_veriler():
 
 tufe_12, oto_2h, oto_2a = otomatik_makro_veriler()
 
-# --- SESSION STATE (Veri ve Zaman Kalıcılığı) ---
+# --- SESSION STATE (Çakışmasız Navigasyon Yönetimi) ---
 if "df_merged" not in st.session_state: st.session_state.df_merged = None
 if "upload_time" not in st.session_state: st.session_state.upload_time = None
-if "active_secim" not in st.session_state: st.session_state.active_secim = "📊 Radar & Taramalar"
+if "nav_page" not in st.session_state:
+    st.session_state.nav_page = "📊 Radar & Taramalar"
+    st.session_state.radio_sonuclar = "📊 Radar & Taramalar"
+    st.session_state.radio_veri = None
+
+# --- NAVİGASYON CALLBACK FONKSİYONLARI ---
+def on_sonuclar_change():
+    val = st.session_state.get("radio_sonuclar")
+    if val:
+        st.session_state.nav_page = val
+        st.session_state.radio_veri = None  # Veri yönetimi seçimini temizle
+
+def on_veri_change():
+    val = st.session_state.get("radio_veri")
+    if val:
+        st.session_state.nav_page = val
+        st.session_state.radio_sonuclar = None  # Sonuçlar seçimini temizle
 
 # --- ÜST BAŞLIK & SAĞ ÜSTTE OTOMATİK MAKRO GÖSTERGESİ ---
 header_col1, header_col2 = st.columns([3, 2])
@@ -83,43 +99,44 @@ with header_col2:
 
 st.markdown("---")
 
-# --- 2. SOL MENÜ (AÇILIR / KAPANIR AKORDEON NAVİGASYON) ---
+# --- 2. SOL MENÜ (KUSURSUZ AKORDEON NAVİGASYON) ---
 st.sidebar.markdown("### ⚡ ALFA Terminal")
 st.sidebar.markdown("---")
 
+is_sonuclar_active = st.session_state.nav_page in [
+    "📊 Radar & Taramalar", 
+    "🔍 Hisse Teşhis Paneli", 
+    "📈 Hareketli Ortalama İnceleme"
+]
+is_veri_active = st.session_state.nav_page in [
+    "📁 Veri Yönetimi (Excel Yükle)"
+]
+
 # 1. AÇILIR KATEGORİ: SONUÇLAR
-with st.sidebar.expander("📊 Sonuçlar", expanded=True):
-    sonuclar_opts = [
-        "📊 Radar & Taramalar", 
-        "🔍 Hisse Teşhis Paneli", 
-        "📈 Hareketli Ortalama İnceleme"
-    ]
-    cur_idx = sonuclar_opts.index(st.session_state.active_secim) if st.session_state.active_secim in sonuclar_opts else 0
-    secim_sonuc = st.radio(
+with st.sidebar.expander("📊 Sonuçlar", expanded=is_sonuclar_active):
+    st.radio(
         "Sonuçlar Seçimi",
-        options=sonuclar_opts,
-        index=cur_idx,
+        options=[
+            "📊 Radar & Taramalar", 
+            "🔍 Hisse Teşhis Paneli", 
+            "📈 Hareketli Ortalama İnceleme"
+        ],
         key="radio_sonuclar",
+        on_change=on_sonuclar_change,
         label_visibility="collapsed"
     )
-    if secim_sonuc != st.session_state.active_secim and secim_sonuc in sonuclar_opts:
-        st.session_state.active_secim = secim_sonuc
 
 # 2. AÇILIR KATEGORİ: VERİ YÖNETİMİ
-with st.sidebar.expander("📁 Veri Yönetimi", expanded=False):
-    veri_opts = ["📁 Veri Yönetimi (Excel Yükle)"]
-    cur_v_idx = veri_opts.index(st.session_state.active_secim) if st.session_state.active_secim in veri_opts else 0
-    secim_veri = st.radio(
+with st.sidebar.expander("📁 Veri Yönetimi", expanded=is_veri_active):
+    st.radio(
         "Veri Yönetimi Seçimi",
-        options=veri_opts,
-        index=cur_v_idx,
+        options=["📁 Veri Yönetimi (Excel Yükle)"],
         key="radio_veri",
+        on_change=on_veri_change,
         label_visibility="collapsed"
     )
-    if secim_veri != st.session_state.active_secim and secim_veri in veri_opts:
-        st.session_state.active_secim = secim_veri
 
-menu_secim = st.session_state.active_secim
+menu_secim = st.session_state.nav_page
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(
