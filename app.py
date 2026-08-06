@@ -126,7 +126,7 @@ if file1 and file2:
             c_teyit = (th['EFK_0'] >= th['ef_EFK_1']) or (th['EFK_0'] >= th['ef_EFK_4'])
             c_roe_t = (th['ROE_0'] >= th['ef_ROE_1']) or (th['ROE_0'] >= th['ef_ROE_4'])
             
-            gecti_ mi = aranan_hisse in df_temel['Kod'].values
+            gecti_mi = aranan_hisse in df_temel['Kod'].values
 
             st.sidebar.markdown(f"### 🔎 **{aranan_hisse} Teşhis Sonucu**")
             st.sidebar.write(f"- ROE > TÜFE ({th['ROE_0']:.1f} > {tufe_12}): {'✅' if c_b else '❌'}")
