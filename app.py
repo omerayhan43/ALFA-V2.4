@@ -4,22 +4,26 @@ import numpy as np
 import datetime
 import yfinance as yf
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="ALFA V2.4 Borsa Algoritma Modeli", layout="wide")
 
-# --- ÖZGÜN CSS (Pointer İşareti ve Modern Navigasyon) ---
+# --- ÖZGÜN CSS (Pointer İşareti, Modern Navigasyon ve Buton Tasarımı) ---
 st.markdown(
     """
     <style>
     div[role="radiogroup"] > label {
         cursor: pointer !important;
-        padding: 10px;
-        border-radius: 5px;
+        padding: 6px 14px !important;
+        border-radius: 6px !important;
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        margin-right: 4px;
+        font-weight: 500;
+        font-size: 13px;
     }
     div[role="radiogroup"] > label:hover {
-        background-color: #f0f2f6;
+        background-color: #e2e8f0;
     }
     </style>
     """,
@@ -158,22 +162,21 @@ if menu_secim == "📁 Veri Yönetimi (Excel Yükle)":
     else:
         st.info("👈 Lütfen her iki Excel dosyasını da yükleyin.")
 
-# --- 4. HAREKETLİ ORTALAMA İNCELEME PANELİ (TRADINGVIEW FORMATI) ---
+# --- 4. HAREKETLİ ORTALAMA İNCELEME PANELİ (TRADINGVIEW FORMATI - HACİMSİZ) ---
 elif menu_secim == "📈 Hareketli Ortalama İnceleme":
     st.markdown("### 📈 Hareketli Ortalama ve Trend İnceleme Paneli")
     
     if st.session_state.df_merged is not None:
         hisse_havuzu = sorted(st.session_state.df_merged["Kod"].dropna().astype(str).str.upper().unique().tolist())
     else:
-        hisse_havuzu = ["A1CAP", "AKBNK", "ARCLK", "ASELS", "BIMAS", "CRDFA", "EGEGY", "EREGL", "FORTE", "GARAN", "KCHOL", "PETKM", "SAHOL", "SISE", "THYAO", "TUPRS"]
+        hisse_havuzu = ["A1CAP", "AKBNK", "ARCLK", "ASELS", "ATATP", "BIMAS", "CRDFA", "EGEGY", "EREGL", "FORTE", "GARAN", "KCHOL", "PETKM", "SAHOL", "SISE", "THYAO", "TUPRS"]
 
     hisse_listesi = [""] + hisse_havuzu
-    secilen_hisse = st.selectbox("Hisse Seçin / Arayın (Örn: A1CAP, CRDFA, THYAO):", options=hisse_listesi, key="ma_inceleme_select")
+    secilen_hisse = st.selectbox("Hisse Seçin / Arayın (Örn: ATATP, A1CAP, THYAO):", options=hisse_listesi, key="ma_inceleme_select")
 
     if secilen_hisse:
         try:
-            with st.spinner(f"🔄 '{secilen_hisse}' TradingView grafik verileri hazırlanıyor..."):
-                # Arka planda 3 yıllık tam veri çekilir (MA hesaplarının bozulmaması için)
+            with st.spinner(f"🔄 '{secilen_hisse}' Grafik verileri hazırlanıyor..."):
                 h_yf = yf.download(secilen_hisse + ".IS", period="3y", progress=False)
                 
             if not h_yf.empty:
@@ -181,16 +184,15 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     h_yf.columns = h_yf.columns.get_level_values(0)
                 h_yf = h_yf.sort_index().dropna()
                 
-                # Dynamic Zaman Aralığı Butonları (Streamlit Native - Kusursuz Y-Ekseni Ölçeklemesi)
-                btn_col1, btn_col2 = st.columns([2, 5])
-                with btn_col1:
-                    zaman_araligi = st.radio(
-                        "Zaman Aralığı",
-                        options=["1A", "3A", "6A", "1Y", "3Y", "Tümü"],
-                        index=3, # Varsayılan: 1Y
-                        horizontal=True,
-                        key="time_frame_radio"
-                    )
+                # Nizami Yan Yana Hizalanmış Periyot Butonları
+                zaman_araligi = st.radio(
+                    "Periyot Seçimi",
+                    options=["1A", "3A", "6A", "1Y", "3Y", "Tümü"],
+                    index=3, # Varsayılan: 1Y
+                    horizontal=True,
+                    label_visibility="collapsed",
+                    key="time_frame_radio"
+                )
 
                 # Seçilen Zaman Aralığına Göre Gösterilecek Verinin Süzülmesi
                 bugun_dt = h_yf.index[-1]
@@ -207,7 +209,7 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 else: # Tümü
                     baslangic_dt = h_yf.index[0]
 
-                # Tüm Seri Üzerinde MA ve HHV Hesabı (Eksiksiz Hesaplama)
+                # Tüm Seri Üzerinde MA ve HHV Hesabı
                 h_yf['MA20'] = h_yf['Close'].rolling(20).mean()
                 h_yf['MA75'] = h_yf['Close'].rolling(75).mean()
                 h_yf['MA200'] = h_yf['Close'].rolling(200).mean()
@@ -226,15 +228,13 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 hi = h_view['High']
                 lo = h_view['Low']
                 cls = h_view['Close']
-                vol = h_view['Volume']
 
                 if isinstance(op, pd.DataFrame): op = op.iloc[:, 0]
                 if isinstance(hi, pd.DataFrame): hi = hi.iloc[:, 0]
                 if isinstance(lo, pd.DataFrame): lo = lo.iloc[:, 0]
                 if isinstance(cls, pd.DataFrame): cls = cls.iloc[:, 0]
-                if isinstance(vol, pd.DataFrame): vol = vol.iloc[:, 0]
 
-                # Seçili Dönem İçin En Yüksek ve En Düşük Günlük Değerler (Düz Kesikli Çizgiler İçin)
+                # Seçili Dönem İçin En Yüksek ve En Düşük Günlük Değerler
                 donem_en_yuksek = float(hi.max())
                 donem_en_dusuk = float(lo.min())
 
@@ -242,15 +242,9 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 son_ma20 = float(h_view['MA20'].iloc[-1]) if not pd.isna(h_view['MA20'].iloc[-1]) else 0
                 son_ma75 = float(h_view['MA75'].iloc[-1]) if not pd.isna(h_view['MA75'].iloc[-1]) else 0
                 son_ma200 = float(h_view['MA200'].iloc[-1]) if not pd.isna(h_view['MA200'].iloc[-1]) else 0
-                son_vol = float(vol.iloc[-1]) if not pd.isna(vol.iloc[-1]) else 0
 
-                # TradingView 2 Katmanlı Subplot (Üst: Mum + MA + High/Low Çizgileri, Alt: Hacim)
-                fig = make_subplots(
-                    rows=2, cols=1, 
-                    shared_xaxes=True, 
-                    vertical_spacing=0.03, 
-                    row_heights=[0.80, 0.20]
-                )
+                # Tek Katmanlı TradingView Grafiği (Hacimsiz, Tam Ekran Odaklı)
+                fig = go.Figure()
                 
                 # 1. Mum Grafiği
                 fig.add_trace(
@@ -260,39 +254,29 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                         name='Fiyat',
                         increasing_line_color='#089981', decreasing_line_color='#F23645',
                         increasing_fillcolor='#089981', decreasing_fillcolor='#F23645'
-                    ),
-                    row=1, col=1
+                    )
                 )
                 
                 # 2. Hareketli Ortalamalar
-                fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA20'], mode='lines', name='MA 20', line=dict(color='#2962FF', width=2)), row=1, col=1)
-                fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA75'], mode='lines', name='MA 75', line=dict(color='#089981', width=2)), row=1, col=1)
-                fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA200'], mode='lines', name='MA 200', line=dict(color='#2A2E39', width=2)), row=1, col=1)
+                fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA20'], mode='lines', name='MA 20', line=dict(color='#2962FF', width=2)))
+                fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA75'], mode='lines', name='MA 75', line=dict(color='#089981', width=2)))
+                fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA200'], mode='lines', name='MA 200', line=dict(color='#2A2E39', width=2)))
                 
-                # 3. DÖNEMSEL EN YÜKSEK & EN DÜŞÜK KESİKLİ YATAY ÇİZGİLERİ (TradingView Formatı)
+                # 3. DÖNEMSEL EN YÜKSEK & EN DÜŞÜK KESİKLİ YATAY ÇİZGİLERİ
                 fig.add_hline(
                     y=donem_en_yuksek, 
                     line_dash="dot", 
                     line_color="#787B86", 
-                    line_width=1.2, 
-                    row=1, col=1
+                    line_width=1.2
                 )
                 fig.add_hline(
                     y=donem_en_dusuk, 
                     line_dash="dot", 
                     line_color="#787B86", 
-                    line_width=1.2, 
-                    row=1, col=1
+                    line_width=1.2
                 )
 
-                # 4. Hacim Barları
-                colors = ['#089981' if c >= o else '#F23645' for c, o in zip(cls, op)]
-                fig.add_trace(
-                    go.Bar(x=h_view.index, y=vol, name='Hacim', marker_color=colors, opacity=0.6),
-                    row=2, col=1
-                )
-                
-                # SAĞ Y-EKSENİ FİYAT ROZETLERİ (Rozet Şeklinde Etiketler)
+                # SAĞ Y-EKSENİ FİYAT ROZETLERİ
                 last_date = h_view.index[-1]
                 
                 def add_right_badge(fig_obj, y_val, text, bg_color, text_color="white"):
@@ -307,22 +291,20 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                         borderpad=3
                     )
 
-                # Sağ Eksen Etiketleri (Fiyat, MA'lar ve Dönem En Yüksek / En Düşük)
+                # Sağ Eksen Etiketleri
                 price_color = "#089981" if cls.iloc[-1] >= op.iloc[-1] else "#F23645"
                 add_right_badge(fig, son_fiyat, f"{son_fiyat:.2f}", price_color)
                 if son_ma20: add_right_badge(fig, son_ma20, f"{son_ma20:.2f}", "#2962FF")
                 if son_ma75: add_right_badge(fig, son_ma75, f"{son_ma75:.2f}", "#089981")
                 if son_ma200: add_right_badge(fig, son_ma200, f"{son_ma200:.2f}", "#2A2E39")
                 
-                # En Yüksek ve En Düşük Sağ Eksen Etiketleri (Koyu Gri TradingView Rozeti)
+                # Koyu Gri TradingView En Yüksek / En Düşük Rozetleri
                 add_right_badge(fig, donem_en_yuksek, f"{donem_en_yuksek:.2f}", "#434651")
                 add_right_badge(fig, donem_en_dusuk, f"{donem_en_dusuk:.2f}", "#434651")
 
-                # SOL ÜST GÖSTERGE LEJANDI (Bilgi Kutusu)
-                vol_str = f"{son_vol/1e6:.2f}M" if son_vol >= 1e6 else f"{son_vol/1e3:.2f}K"
-                
+                # SOL ÜST GÖSTERGE LEJANDI (Hacim Bilgisi Çıkarıldı)
                 info_html = (
-                    f"<b>{secilen_hisse} · 1G</b> &nbsp; <span style='color:gray;'>Hacim: {vol_str}</span><br>"
+                    f"<b>{secilen_hisse} · 1G</b><br>"
                     f"<span style='color:#2962FF;'>MA 20 close 0: <b>{son_ma20:.2f}</b></span><br>"
                     f"<span style='color:#089981;'>MA 75 close 0: <b>{son_ma75:.2f}</b></span><br>"
                     f"<span style='color:#2A2E39;'>MA 200 close 0: <b>{son_ma200:.2f}</b></span><br>"
@@ -341,11 +323,12 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     font=dict(size=12, family="Arial")
                 )
                 
-                # TRADINGVIEW TEMA DÜZENLEMELERİ & OTOMATİK DİNAMİK Y-EKSENİ ÖLÇEĞİ
+                # TRADINGVIEW TEMA DÜZENLEMELERİ & OTOMATİK DİNAMİK ÖLÇEK
+                y_padding = (donem_en_yuksek - donem_en_dusuk) * 0.04
                 fig.update_layout(
                     template="plotly_white",
-                    height=680,
-                    margin=dict(l=10, r=80, t=20, b=10),
+                    height=600,
+                    margin=dict(l=10, r=85, t=10, b=10),
                     xaxis_rangeslider_visible=False,
                     showlegend=False,
                     hovermode="x unified",
@@ -353,16 +336,12 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     paper_bgcolor="#FFFFFF"
                 )
                 
-                # Y Ekseninin Dönem İçi En Düşük ve En Yüksek Seviyeye Göre Tam Oturması (%4 Marjlı)
-                y_padding = (donem_en_yuksek - donem_en_dusuk) * 0.04
                 fig.update_yaxes(
                     side="right", 
                     tickformat=".2f", 
                     gridcolor="#F0F0F0", 
-                    row=1, col=1, 
                     range=[donem_en_dusuk - y_padding, donem_en_yuksek + y_padding]
                 )
-                fig.update_yaxes(side="right", gridcolor="#F0F0F0", row=2, col=1)
                 fig.update_xaxes(gridcolor="#F0F0F0")
                 
                 st.plotly_chart(fig, use_container_width=True)
