@@ -2,7 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import datetime
-from zoneinfo import ZoneInfo  # İstanbul saat dilimi için
+import os
+import json
+from zoneinfo import ZoneInfo
 import yfinance as yf
 import plotly.graph_objects as go
 
@@ -11,6 +13,10 @@ st.set_page_config(page_title="ALFA V2.4 Borsa Algoritma Modeli", layout="wide")
 
 # İSTANBUL SAAT DİLİMİ (UTC+3)
 TURKEY_TZ = ZoneInfo("Europe/Istanbul")
+
+# VERİ KALICILIĞI İÇİN DOSYA YOLLARI
+DATA_CACHE_PATH = "alfa_data_cache.pkl"
+META_CACHE_PATH = "alfa_meta_cache.json"
 
 # --- ÖZGÜN CSS (Pointer İşareti ve Menü Tasarımı) ---
 st.markdown(
@@ -27,16 +33,6 @@ st.markdown(
     div[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
         background-color: #f1f5f9 !important;
         color: #0f172a !important;
-    }
-    /* Periyot Butonlarının Şık Hizalanması */
-    div[data-testid="stHorizontalBlock"] div[role="radiogroup"] > label {
-        background-color: #f8fafc;
-        border: 1px solid #cbd5e1;
-        padding: 4px 12px !important;
-        border-radius: 6px !important;
-        font-weight: 600;
-        font-size: 13px;
-        margin-right: 4px;
     }
     </style>
     """,
@@ -71,13 +67,24 @@ def otomatik_makro_veriler():
 
 tufe_12, oto_2h, oto_2a = otomatik_makro_veriler()
 
-# --- SESSION STATE (Çakışmasız Navigasyon Yönetimi) ---
+# --- SESSION STATE & F5 VERİ KALICILIĞI YÖNETİMİ ---
 if "df_merged" not in st.session_state: st.session_state.df_merged = None
 if "upload_time" not in st.session_state: st.session_state.upload_time = None
 if "nav_page" not in st.session_state:
     st.session_state.nav_page = "📊 Radar & Taramalar"
     st.session_state.radio_sonuclar = "📊 Radar & Taramalar"
     st.session_state.radio_veri = None
+
+# F5 Yenilemelerinde Veriyi Diskten Otomatik Yükleme
+if st.session_state.df_merged is None:
+    if os.path.exists(DATA_CACHE_PATH) and os.path.exists(META_CACHE_PATH):
+        try:
+            st.session_state.df_merged = pd.read_pickle(DATA_CACHE_PATH)
+            with open(META_CACHE_PATH, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+                st.session_state.upload_time = meta.get("upload_time")
+        except Exception:
+            pass
 
 # --- NAVİGASYON CALLBACK FONKSİYONLARI ---
 def on_sonuclar_change():
@@ -168,7 +175,7 @@ st.sidebar.markdown(
 # --- 3. VERİ YÖNETİMİ VE DOSYA YÜKLEME EKRANI ---
 if menu_secim == "📁 Veri Yönetimi (Excel Yükle)":
     st.subheader("📁 Fintables Veri Yönetimi ve Excel Yükleme")
-    st.markdown("Modelin tarama yapabilmesi için güncel Fintables Excel dosyalarınızı aşağıya yükleyin. Yüklediğiniz dosyalar sekmeler arasında gezindiğinizde **asla silinmez**.")
+    st.markdown("Modelin tarama yapabilmesi için güncel Fintables Excel dosyalarınızı aşağıya yükleyin. Yüklediğiniz dosyalar sekmeler ve sayfa yenilemeleri (F5) arasında **asla silinmez**.")
     
     col_up1, col_up2 = st.columns(2)
     with col_up1:
@@ -209,14 +216,24 @@ if menu_secim == "📁 Veri Yönetimi (Excel Yükle)":
             df["ef_ROE_4"] = np.where(bilanco_gelmedi, np.where(df["ROE_5"] != 0, df["ROE_5"], df["ROE_4"]), df["ROE_4"])
 
             st.session_state.df_merged = df
-            # İSTANBUL SAATİNE GÖRE YÜKLEME ZAMANI KAYDI
+            
+            # İSTANBUL SAAT DİLİMİNE GÖRE YÜKLEME TARİHİ
             now_tr = datetime.datetime.now(TURKEY_TZ)
             st.session_state.upload_time = now_tr.strftime("%d.%m.%Y %H:%M:%S")
+
+            # F5 REFRESH KORUMASI İÇİN DİSKE KAYIT
+            df.to_pickle(DATA_CACHE_PATH)
+            with open(META_CACHE_PATH, "w", encoding="utf-8") as f:
+                json.dump({"upload_time": st.session_state.upload_time}, f)
+
             st.success(f"✅ Excel dosyaları başarıyla işlendi ve hafızaya kaydedildi! (Yükleme Zamanı: {st.session_state.upload_time}) Sol menüden **'📊 Radar & Taramalar'** sekmesine geçebilirsiniz.")
         except Exception as e:
             st.error(f"Dosyalar işlenirken hata oluştu: {e}")
     else:
-        st.info("👈 Lütfen her iki Excel dosyasını da yükleyin.")
+        if st.session_state.df_merged is not None:
+            st.success(f"📌 Sistemde en son yüklenen veri aktif (Yükleme Zamanı: {st.session_state.upload_time}). Yeni dosya yüklemedikçe bu veri korunacaktır.")
+        else:
+            st.info("👈 Lütfen her iki Excel dosyasını da yükleyin.")
 
 # --- 4. HAREKETLİ ORTALAMA İNCELEME PANELİ ---
 elif menu_secim == "📈 Hareketli Ortalama İnceleme":
@@ -227,20 +244,8 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
     else:
         hisse_havuzu = ["A1CAP", "AKBNK", "ARCLK", "ASELS", "ATATP", "BIMAS", "CRDFA", "EGEGY", "EREGL", "FORTE", "GARAN", "KCHOL", "PETKM", "SAHOL", "SISE", "THYAO", "TUPRS"]
 
-    col_sel1, col_sel2 = st.columns([2, 3])
-    with col_sel1:
-        hisse_listesi = [""] + hisse_havuzu
-        secilen_hisse = st.selectbox("Hisse Seçin / Arayın (Örn: CRDFA, ATATP, THYAO):", options=hisse_listesi, key="ma_inceleme_select")
-    
-    with col_sel2:
-        if secilen_hisse:
-            periyot = st.radio(
-                "Zaman Aralığı",
-                options=["1A", "3A", "6A", "1Y", "3Y", "Tümü"],
-                index=3, # Varsayılan: 1Y
-                horizontal=True,
-                key="chart_period_radio"
-            )
+    hisse_listesi = [""] + hisse_havuzu
+    secilen_hisse = st.selectbox("Hisse Seçin / Arayın (Örn: CRDFA, ATATP, THYAO):", options=hisse_listesi, key="ma_inceleme_select")
 
     if secilen_hisse:
         try:
@@ -261,49 +266,27 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 hhv252 = float(hi_252.max())
                 hhv_limit = hhv252 * 0.77
 
-                # Python Tarafında Süzme (Tam Ekranda veya Normal Görünümde Kusursuz Ölçek)
-                bugun_dt = h_yf.index[-1]
-                if periyot == "1A":
-                    baslangic_dt = bugun_dt - pd.Timedelta(days=30)
-                elif periyot == "3A":
-                    baslangic_dt = bugun_dt - pd.Timedelta(days=90)
-                elif periyot == "6A":
-                    baslangic_dt = bugun_dt - pd.Timedelta(days=180)
-                elif periyot == "1Y":
-                    baslangic_dt = bugun_dt - pd.Timedelta(days=365)
-                elif periyot == "3Y":
-                    baslangic_dt = bugun_dt - pd.Timedelta(days=1095)
-                else:
-                    baslangic_dt = h_yf.index[0]
-
-                h_view = h_yf.loc[h_yf.index >= baslangic_dt].copy()
-                if h_view.empty:
-                    h_view = h_yf.copy()
-
-                op = h_view['Open']
-                hi = h_view['High']
-                lo = h_view['Low']
-                cls = h_view['Close']
+                op = h_yf['Open']
+                hi = h_yf['High']
+                lo = h_yf['Low']
+                cls = h_yf['Close']
 
                 if isinstance(op, pd.DataFrame): op = op.iloc[:, 0]
                 if isinstance(hi, pd.DataFrame): hi = hi.iloc[:, 0]
                 if isinstance(lo, pd.DataFrame): lo = lo.iloc[:, 0]
                 if isinstance(cls, pd.DataFrame): cls = cls.iloc[:, 0]
 
-                donem_en_yuksek = float(hi.max())
-                donem_en_dusuk = float(lo.min())
-
                 son_fiyat = float(cls.iloc[-1])
-                son_ma20 = float(h_view['MA20'].iloc[-1]) if not pd.isna(h_view['MA20'].iloc[-1]) else 0
-                son_ma75 = float(h_view['MA75'].iloc[-1]) if not pd.isna(h_view['MA75'].iloc[-1]) else 0
-                son_ma200 = float(h_view['MA200'].iloc[-1]) if not pd.isna(h_view['MA200'].iloc[-1]) else 0
+                son_ma20 = float(h_yf['MA20'].iloc[-1]) if not pd.isna(h_yf['MA20'].iloc[-1]) else 0
+                son_ma75 = float(h_yf['MA75'].iloc[-1]) if not pd.isna(h_yf['MA75'].iloc[-1]) else 0
+                son_ma200 = float(h_yf['MA200'].iloc[-1]) if not pd.isna(h_yf['MA200'].iloc[-1]) else 0
 
                 fig = go.Figure()
                 
                 # Mum Grafiği
                 fig.add_trace(
                     go.Candlestick(
-                        x=h_view.index,
+                        x=h_yf.index,
                         open=op, high=hi, low=lo, close=cls,
                         name='Fiyat',
                         increasing_line_color='#089981', decreasing_line_color='#F23645',
@@ -312,15 +295,11 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 )
                 
                 # Hareketli Ortalamalar
-                fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA20'], mode='lines', name='MA 20', line=dict(color='#2962FF', width=2)))
-                fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA75'], mode='lines', name='MA 75', line=dict(color='#089981', width=2)))
-                fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA200'], mode='lines', name='MA 200', line=dict(color='#2A2E39', width=2)))
+                fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['MA20'], mode='lines', name='MA 20', line=dict(color='#2962FF', width=2)))
+                fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['MA75'], mode='lines', name='MA 75', line=dict(color='#089981', width=2)))
+                fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['MA200'], mode='lines', name='MA 200', line=dict(color='#2A2E39', width=2)))
                 
-                # En Yüksek / En Düşük Çizgileri
-                fig.add_hline(y=donem_en_yuksek, line_dash="dot", line_color="#787B86", line_width=1.2)
-                fig.add_hline(y=donem_en_dusuk, line_dash="dot", line_color="#787B86", line_width=1.2)
-
-                last_date = h_view.index[-1]
+                last_date = h_yf.index[-1]
                 
                 def add_right_badge(fig_obj, y_val, text, bg_color, text_color="white"):
                     fig_obj.add_annotation(
@@ -339,9 +318,6 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 if son_ma20: add_right_badge(fig, son_ma20, f"{son_ma20:.2f}", "#2962FF")
                 if son_ma75: add_right_badge(fig, son_ma75, f"{son_ma75:.2f}", "#089981")
                 if son_ma200: add_right_badge(fig, son_ma200, f"{son_ma200:.2f}", "#2A2E39")
-                
-                add_right_badge(fig, donem_en_yuksek, f"{donem_en_yuksek:.2f}", "#434651")
-                add_right_badge(fig, donem_en_dusuk, f"{donem_en_dusuk:.2f}", "#434651")
 
                 # SOL ÜST GÖSTERGE LEJANDI
                 info_html = (
@@ -364,25 +340,60 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     font=dict(size=12, family="Arial")
                 )
 
-                y_pad = (donem_en_yuksek - donem_en_dusuk) * 0.03 if donem_en_yuksek != donem_en_dusuk else 1.0
+                # Tarih Hesaplamaları
+                max_dt = h_yf.index[-1]
+                min_dt = h_yf.index[0]
+                dt_1m = (max_dt - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
+                dt_3m = (max_dt - pd.Timedelta(days=90)).strftime("%Y-%m-%d")
+                dt_6m = (max_dt - pd.Timedelta(days=180)).strftime("%Y-%m-%d")
+                dt_1y = (max_dt - pd.Timedelta(days=365)).strftime("%Y-%m-%d")
+                dt_3y = (max_dt - pd.Timedelta(days=1095)).strftime("%Y-%m-%d")
+                dt_max = max_dt.strftime("%Y-%m-%d")
+                dt_min = min_dt.strftime("%Y-%m-%d")
 
                 fig.update_layout(
                     template="plotly_white",
                     height=650,
-                    margin=dict(l=10, r=85, t=15, b=10),
+                    margin=dict(l=10, r=85, t=60, b=10),
                     xaxis_rangeslider_visible=False,
                     showlegend=False,
                     hovermode="x unified",
                     plot_bgcolor="#FFFFFF",
-                    paper_bgcolor="#FFFFFF"
+                    paper_bgcolor="#FFFFFF",
+                    # TAM EKRANDA BİLE HİÇ KAYBOLMAYAN CANVASE İÇİ ZAMAN ÇİZELGESİ BUTONLARI
+                    updatemenus=[
+                        dict(
+                            type="buttons",
+                            direction="right",
+                            active=3, # Varsayılan 1Y
+                            x=0.01,
+                            y=1.08,
+                            xanchor="left",
+                            yanchor="bottom",
+                            bgcolor="#F8FAFC",
+                            bordercolor="#CBD5E1",
+                            borderwidth=1,
+                            font=dict(color="#1E293B", size=12, family="Arial"),
+                            buttons=[
+                                dict(label="1A", method="relayout", args=[{"xaxis.range": [dt_1m, dt_max], "yaxis.autorange": True}]),
+                                dict(label="3A", method="relayout", args=[{"xaxis.range": [dt_3m, dt_max], "yaxis.autorange": True}]),
+                                dict(label="6A", method="relayout", args=[{"xaxis.range": [dt_6m, dt_max], "yaxis.autorange": True}]),
+                                dict(label="1Y", method="relayout", args=[{"xaxis.range": [dt_1y, dt_max], "yaxis.autorange": True}]),
+                                dict(label="3Y", method="relayout", args=[{"xaxis.range": [dt_3y, dt_max], "yaxis.autorange": True}]),
+                                dict(label="Tümü", method="relayout", args=[{"xaxis.range": [dt_min, dt_max], "yaxis.autorange": True}]),
+                            ]
+                        )
+                    ]
                 )
                 
-                fig.update_xaxes(gridcolor="#F0F0F0")
+                # Initial Range set to 1Y
+                fig.update_xaxes(gridcolor="#F0F0F0", range=[dt_1y, dt_max])
                 fig.update_yaxes(
                     side="right", 
                     tickformat=".2f", 
                     gridcolor="#F0F0F0",
-                    range=[donem_en_dusuk - y_pad, donem_en_yuksek + y_pad]
+                    autorange=True,
+                    fixedrange=False
                 )
                 
                 st.plotly_chart(fig, use_container_width=True)
