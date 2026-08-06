@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import datetime
 import yfinance as yf
+import plotly.graph_objects as go
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="ALFA V2.4 Borsa Algoritma Modeli", layout="wide")
@@ -346,7 +347,15 @@ if st.session_state.df_merged is not None:
                                 m20 = float(cls.rolling(20).mean().iloc[-1])
                                 m75 = float(cls.rolling(75).mean().iloc[-1])
                                 m200 = float(cls.rolling(200).mean().iloc[-1])
-                                
+                                # --- GRAFİK EKLEME BLOĞU ---
+                                fig = go.Figure()
+                                fig.add_trace(go.Candlestick(x=h_yf.index, open=h_yf['Open'], high=h_yf['High'], low=h_yf['Low'], close=h_yf['Close'], name='Fiyat'))
+                                fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['Close'].rolling(20).mean(), line=dict(color='blue', width=1), name='MA20'))
+                                fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['Close'].rolling(75).mean(), line=dict(color='green', width=1), name='MA75'))
+                                fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['Close'].rolling(200).mean(), line=dict(color='black', width=1), name='MA200'))
+                                fig.update_layout(title=f"{secilen_hisse} Teknik Analiz", height=500, xaxis_rangeslider_visible=False)
+                                st.plotly_chart(fig, use_container_width=True)
+                                # ---------------------------
                                 teknik_gecti = bool((m75 > m200) and (m20 > m75))
                                 if not teknik_gecti:
                                     takilan_kriterler.append("Teknik MA Kuralı (MA75 > MA200 ve MA20 > MA75)")
