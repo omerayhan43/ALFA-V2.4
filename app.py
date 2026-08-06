@@ -265,7 +265,7 @@ if file1 and file2:
                                 st.write(f"- **MA200:** {m200:.2f}")
                                 st.write(f"- **Teknik Kural (MA20 > MA75 > MA200):** {'✅ Sağlıyor' if teknik_gecti else '❌ Sağlamıyor'}")
                                 
-                                # Uyarı Mesajı Gösterimi (İstediğin Format: Alt alta tire ile)
+                                # Uyarı Mesajı Gösterimi (Alt alta tire ile)
                                 if takilan_kriterler:
                                     uyari_mesaji = "Hisse aşağıdaki kriterleri sağlamadığı için filtrelerden geçemedi;\n"
                                     for kriter in takilan_kriterler:
@@ -311,8 +311,17 @@ if file1 and file2:
                                 st.write(f"- Trend / MA Katkısı (%18): {(tr_skor * 0.18):.2f}")
                                 st.write(f"- Momentum Katkısı (%15): {(m_skor * 0.15):.2f}")
                                 st.write(f"- PD/DD Katkısı (%12): {(p_skor * 0.12):.2f}")
-                                if n_ceza != 0 or ard_ceza != 0:
-                                    st.warning(f"Uygulanan Cezalar -> Kısa Vade: {n_ceza}, Ardışık: {ard_ceza}")
+                                
+                                # Cezaları alt alta tire ile listeleme
+                                aktif_cezalar = []
+                                if n_ceza != 0: aktif_cezalar.append(f"Kısa Vade: {n_ceza}")
+                                if ard_ceza != 0: aktif_cezalar.append(f"Ardışık: {ard_ceza}")
+
+                                if aktif_cezalar:
+                                    ceza_mesaji = "Uygulanan Cezalar;\n"
+                                    for ceza in aktif_cezalar:
+                                        ceza_mesaji += f"\n- {ceza}"
+                                    st.warning(ceza_mesaji)
                             else:
                                 st.warning("Yeterli fiyat geçmişi (200 gün) bulunamadı.")
                         else:
