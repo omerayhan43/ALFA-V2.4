@@ -340,31 +340,43 @@ if st.session_state.df_merged is not None:
                         h_yf = yf.download(secilen_hisse + ".IS", period="1y", progress=False)
                         if not h_yf.empty:
                             h_yf = h_yf.sort_index().dropna()
+                            
+                            # --- SÜTUN DÜZELTME (YFINANCE MULTIINDEX HATASI ÇÖZÜCÜ) ---
+                            if isinstance(h_yf.columns, pd.MultiIndex):
+                                h_yf.columns = h_yf.columns.get_level_values(0)
+                            # ---------------------------------------------------------
+
                             cls = h_yf['Close']
                             if isinstance(cls, pd.DataFrame): cls = cls.iloc[:, 0]
                             
-                            # MA Hesaplamaları
-                            h_yf['MA20'] = cls.rolling(20).mean()
-                            h_yf['MA75'] = cls.rolling(75).mean()
-                            
-                            # --- GRAFİK BURAYA EKLENDİ ---
-                            st.line_chart(h_yf[['Close', 'MA20', 'MA75']])
-                            # -----------------------------
-
                             if len(cls) >= 200:
                                 m20 = float(cls.rolling(20).mean().iloc[-1])
                                 m75 = float(cls.rolling(75).mean().iloc[-1])
                                 m200 = float(cls.rolling(200).mean().iloc[-1])
+                                
+                                # MA Değerlerini DataFrame'e ekleyip interaktif grafik çizdiriyoruz
+                                h_yf['MA20'] = cls.rolling(20).mean()
+                                h_yf['MA75'] = cls.rolling(75).mean()
+                                h_yf['MA200'] = cls.rolling(200).mean()
+                                st.line_chart(h_yf[['Close', 'MA20', 'MA75', 'MA200']])
                                 
                                 teknik_gecti = bool((m75 > m200) and (m20 > m75))
                                 if not teknik_gecti:
                                     takilan_kriterler.append("Teknik MA Kuralı (MA75 > MA200 ve MA20 > MA75)")
 
                                 st.write(f"- **Güncel Kapanış:** {float(th['Kapanis']):.2f}")
-                                st.write(f"- **MA20:** {m20:.2f} | **MA75:** {m75:.2f} | **MA200:** {m200:.2f}")
-                                st.write(f"- **Teknik Kural:** {'✅ Sağlıyor' if teknik_gecti else '❌ Sağlamıyor'}")
+                                st.write(f"- **MA20:** {m20:.2f}")
+                                st.write(f"- **MA75:** {m75:.2f}")
+                                st.write(f"- **MA200:** {m200:.2f}")
+                                st.write(f"- **Teknik Kural (MA20 > MA75 > MA200):** {'✅ Sağlıyor' if teknik_gecti else '❌ Sağlamıyor'}")
                                 
-                                # (Buradan sonrası skorlama ve ceza mekanizman, kodun geri kalanını aynen bırak)
+                                if takilan_kriterler:
+                                    uyari_mesaji = "Hisse aşağıdaki kriterleri sağlamadığı için filtrelerden geçemedi;\n"
+                                    for kriter in takilan_kriterler:
+                                        uyari_mesaji += f"\n- {kriter}"
+                                    st.warning(uyari_mesaji)
+                                else:
+                                    st.success('🎉 Tebrikler! Hisse tüm temel ve teknik filtrelerden başarıyla geçti.')
 
                                 roe_val = float(th['ROE_0'])
                                 m6_val = float(th['Getiri_6a'])
@@ -392,7 +404,7 @@ if st.session_state.df_merged is not None:
                                 
                                 nihai_skor = float(
                                     (r_skor * 0.30) + (b_skor * 0.20) + (m_skor * 0.15) + 
-                                    (m2_skor * 0.05) + (trendSkor * 0.18 if 'trendSkor' in locals() else tr_skor * 0.18) + (p_skor * 0.12) + n_ceza + ard_ceza
+                                    (m2_skor * 0.05) + (tr_skor * 0.18) + (p_skor * 0.12) + n_ceza + ard_ceza
                                 )
                                 
                                 st.markdown("---")
@@ -418,8 +430,3 @@ if st.session_state.df_merged is not None:
                             st.warning("Yahoo Finance verisi alınamadı.")
                     except Exception as e:
                         st.error(f"Teknik veri çekilirken hata oluştu: {e}")
-            else:
-                st.warning(f"'{secilen_hisse}' kodlu hisse Fintables dosyalarında bulunamadı.")
-else:
-    if menu_secim != "📁 Veri Yönetimi (Excel Yükle)":
-        st.warning("👈 Lütfen sol menüden **'📁 Veri Yönetimi (Excel Yükle)'** seçeneğine tıklayarak dosyalarınızı yükleyin.")
