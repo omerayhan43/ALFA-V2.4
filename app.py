@@ -7,15 +7,12 @@ import yfinance as yf
 # Sayfa Yapılandırması
 st.set_page_config(page_title="ALFA V2.4 Borsa Algoritma Modeli", layout="wide")
 
-st.title("📈 BIST Algoritmik Hisse Seçim Modeli (ALFA V2.4)")
-st.markdown("Temel + Teknik Filtreleme -> Ağırlıklı Skorlama -> İlk 5 Hisse Portföy Adayı")
-
-# --- 1. OTOMATİK XU100 ENDEKS (TARİH BAZLI - TAKVİM UYUMLU) ---
+# --- 1. OTOMATİK XU100 ENDEKS & MAKRO GİRDİLERİ (ARKA PLAN) ---
 @st.cache_data(ttl=3600)
-def otomatik_xu100_getirileri():
+def otomatik_makro_veriler():
     try:
         df = yf.download("XU100.IS", period="3mo", progress=False)
-        if df.empty: return -1.98, 0.76 
+        if df.empty: return 31.75, -1.98, 0.76 
         
         df.index = pd.to_datetime(df.index)
         bugun = pd.Timestamp.today()
@@ -32,24 +29,32 @@ def otomatik_xu100_getirileri():
         xu100_2h = ((price_today - price_t2w) / price_t2w) * 100
         xu100_2a = ((price_today - price_t2m) / price_t2m) * 100
         
-        return float(xu100_2h), float(xu100_2a)
+        return 31.75, float(xu100_2h), float(xu100_2a)
     except:
-        return -1.98, 0.76
+        return 31.75, -1.98, 0.76
 
-oto_2h, oto_2a = otomatik_xu100_getirileri()
+tufe_12, oto_2h, oto_2a = otomatik_makro_veriler()
 
-bugun = pd.Timestamp.today()
-fmt = "%d.%m.%Y"
-bugun_str = bugun.strftime(fmt)
-iki_hafta_once = (bugun - pd.DateOffset(weeks=2)).strftime(fmt)
-iki_ay_once = (bugun - pd.DateOffset(months=2)).strftime(fmt)
+# --- ÜST BAŞLIK & SAĞ ÜSTTE OTOMATİK MAKRO GÖSTERGESİ ---
+header_col1, header_col2 = st.columns([3, 2])
+with header_col1:
+    st.title("📈 BIST Algoritmik Hisse Seçim Modeli (ALFA V2.4)")
+    st.markdown("Temel + Teknik Filtreleme -> Ağırlıklı Skorlama -> İlk 5 Hisse Portföy Adayı")
 
-# --- 2. YAN MENÜ: MAKRO GİRDİLERİ & DOSYA YÜKLEME ---
-st.sidebar.header("⚙️ Makro Girdiler (Otomatik & Güncel)")
-tufe_12 = st.sidebar.number_input("TÜFE(12) Yıllık %", value=31.75, format="%.2f")
-xu100_2a = st.sidebar.number_input(f"XU100 2-Aylık Getiri % ({iki_ay_once} - {bugun_str})", value=round(oto_2a, 2), format="%.2f")
-xu100_2h = st.sidebar.number_input(f"XU100 2-Haftalık Getiri % ({iki_hafta_once} - {bugun_str})", value=round(oto_2h, 2), format="%.2f")
+with header_col2:
+    st.markdown(
+        f"""
+        <div style="background-color: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #e9ecef; font-size: 13px; text-align: right;">
+            <b>⚙️ Otomatik Makro Girdiler:</b><br>
+            <span>TÜFE(12): <b>%{tufe_12:.2f}</b> | XU100 2A: <b>%{oto_2a:.2f}</b> | XU100 2H: <b>%{oto_2h:.2f}</b></span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
+st.markdown("---")
+
+# --- 2. YAN MENÜ: SADECE FİNTABLES DOSYA YÜKLEME ---
 st.sidebar.header("📁 Fintables Veri Yükleme")
 file1 = st.sidebar.file_uploader("1. Temel Analiz & Fiyat Dosyası", type=["xlsx", "xls"])
 file2 = st.sidebar.file_uploader("2. Eski Dönemler Dosyası (1)", type=["xlsx", "xls"])
@@ -88,11 +93,11 @@ if file1 and file2:
     # --- 3. TEMEL KRİTERLER (FİLTRELEME) ---
     df["pdddLimit"] = np.where(df["ROE_0"] > 90, 8 + (df["ROE_0"] - 90) * 0.07, 8)
     
-    a = df["Getiri_2a"] > xu100_2a
+    a = df["Getiri_2a"] > oto_2a
     b = df["ROE_0"] > tufe_12
     c = df["NetBorc_FAVOK"] < 4
     d = df["PDDD"] < df["pdddLimit"]
-    ee = df["Getiri_2h"] > (xu100_2h - 10)
+    ee = df["Getiri_2h"] > (oto_2h - 10)
     f = df["NetSatisBuyume"] > 0
     g = df["FAVOKBuyume"] > tufe_12
     h = (df["BrutEFKBuyume"] > tufe_12) & (df["EFKBuyume"] > tufe_12)
@@ -110,7 +115,7 @@ if file1 and file2:
     tab1, tab2 = st.tabs(["📊 Portföy ve Tarama Sonuçları", "🔍 Detaylı Hisse Teşhis Paneli"])
 
     with tab1:
-        # ARKA PLAN TEKNİK VERİLERİNİ ÇEKME (Önden Çalıştırılır)
+        # ARKA PLAN TEKNİK VERİLERİNİ ÇEKME
         teknik_asanadan_gecenler = []
         if len(df_temel) > 0:
             with st.spinner("🔄 Temelden geçen hisselerin hareketli ortalamaları (MA20, MA75, MA200) anlık çekiliyor..."):
@@ -178,7 +183,7 @@ if file1 and file2:
                 df_sonuc = df_teknik.sort_values(by="SKOR", ascending=False).reset_index(drop=True)
                 df_sonuc.index += 1
 
-                # --- 1. ANA ÇIKTI: NİHAİ PORTFÖY ADAYLARI (EN ÜSTTE) ---
+                # --- 1. ANA ÇIKTI: NİHAİ PORTFÖY ADAYLARI ---
                 st.markdown("### 🏆 Nihai Portföy Adayları (En İyi Skorlar)")
                 def highlight_top5(s):
                     return ['background-color: #d4edda; font-weight: bold;' if s.name <= 5 else '' for _ in s]
@@ -195,7 +200,7 @@ if file1 and file2:
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # --- 2. DETAY TABLOLARI (AKORDEON İÇİNDE - GÖZ YORMASIN) ---
+            # --- 2. DETAY TABLOLARI (AKORDEON İÇİNDE) ---
             with st.expander("📋 Arka Plan Verileri: Temel Kriterleri Geçen Tüm Hisseler"):
                 st.dataframe(
                     df_temel[["Kod", "Bilanco_Durum", "ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"]]
@@ -226,11 +231,11 @@ if file1 and file2:
                 p_lim = float(8 + (th['ROE_0'] - 90) * 0.07 if th['ROE_0'] > 90 else 8)
                 
                 # Temel Kurallar Kontrolü
-                c_a = bool(th['Getiri_2a'] > xu100_2a)
+                c_a = bool(th['Getiri_2a'] > oto_2a)
                 c_b = bool(th['ROE_0'] > tufe_12)
                 c_c = bool(th['NetBorc_FAVOK'] < 4)
                 c_d = bool(th['PDDD'] < p_lim)
-                c_ee = bool(th['Getiri_2h'] > (xu100_2h - 10))
+                c_ee = bool(th['Getiri_2h'] > (oto_2h - 10))
                 c_f = bool(th['NetSatisBuyume'] > 0)
                 c_g = bool(th['FAVOKBuyume'] > tufe_12)
                 c_h = bool((th['BrutEFKBuyume'] > tufe_12) and (th['EFKBuyume'] > tufe_12))
@@ -259,8 +264,8 @@ if file1 and file2:
                 with col1:
                     st.markdown(f"#### 🏛️ Temel Analiz Kriterleri ({secilen_hisse})")
                     st.write(f"- **ROE > TÜFE** ({float(th['ROE_0']):.2f} > {tufe_12:.2f}): {'✅ Geçti' if c_b else '❌ Kaldı'}")
-                    st.write(f"- **2A Getiri > XU100** ({float(th['Getiri_2a']):.2f} > {xu100_2a:.2f}): {'✅ Geçti' if c_a else '❌ Kaldı'}")
-                    st.write(f"- **2H Getiri Şartı** ({float(th['Getiri_2h']):.2f} > {xu100_2h - 10:.2f}): {'✅ Geçti' if c_ee else '❌ Kaldı'}")
+                    st.write(f"- **2A Getiri > XU100** ({float(th['Getiri_2a']):.2f} > {oto_2a:.2f}): {'✅ Geçti' if c_a else '❌ Kaldı'}")
+                    st.write(f"- **2H Getiri Şartı** ({float(th['Getiri_2h']):.2f} > {oto_2h - 10:.2f}): {'✅ Geçti' if c_ee else '❌ Kaldı'}")
                     st.write(f"- **PD/DD < Sınır** ({float(th['PDDD']):.2f} < {p_lim:.2f}): {'✅ Geçti' if c_d else '❌ Kaldı'}")
                     st.write(f"- **Net Borç / FAVÖK < 4** ({float(th['NetBorc_FAVOK']):.2f}): {'✅ Geçti' if c_c else '❌ Kaldı'}")
                     st.write(f"- **Net Satış Büyümesi > 0** ({float(th['NetSatisBuyume']):.2f}): {'✅ Geçti' if c_f else '❌ Kaldı'}")
@@ -299,7 +304,7 @@ if file1 and file2:
                                         uyari_mesaji += f"\n- {kriter}"
                                     st.warning(uyari_mesaji)
                                 else:
-                                    st.success('🎉 Tebrikler! Hisse tüm temel dan teknik filtrelerden başarıyla geçti.')
+                                    st.success('🎉 Tebrikler! Hisse tüm temel ve teknik filtrelerden başarıyla geçti.')
 
                                 # Skor Hesaplama Detayı
                                 roe_val = float(th['ROE_0'])
