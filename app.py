@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import datetime
 import yfinance as yf
-import requests
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="ALFA V2.4 Borsa Algoritma Modeli", layout="wide")
@@ -11,19 +10,27 @@ st.set_page_config(page_title="ALFA V2.4 Borsa Algoritma Modeli", layout="wide")
 st.title("📈 BIST Algoritmik Hisse Seçim Modeli (ALFA V2.4)")
 st.markdown("Temel + Teknik Filtreleme -> Ağırlıklı Skorlama -> İlk 5 Hisse Portföy Adayı")
 
-# --- 1. OTOMATİK GÜNCEL TÜFE VE TARİH ÇEKME ---
-@st.cache_data(ttl=86400) # Günde bir kez güncel veriyi önbelleğe alır
-def get_guncel_tufe():
+# --- 1. OTOMATİK XU100 ENDEKS GETİRİLERİ HESAPLAMA ---
+@st.cache_data(ttl=3600)
+def otomatik_xu100_getirileri():
     try:
-        # Türkiye'nin güncel yıllık enflasyon verisini sağlayan açık finansal kaynak / API entegrasyonu
-        # Bağlantı sağlanamazsa en güncel TCMB/TÜİK bazlı son resmi oran yedek olarak atanır
-        url = "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=try" # Örnek stabil bağlantı yerine TCMB/Enflasyon API endpoint'i
-        # Güvenli fallback (Güncel resmi enflasyon Bandı)
-        return 61.78 
+        bist100 = yf.download("XU100.IS", period="3mo", progress=False)
+        if not bist100.empty and len(bist100) >= 40:
+            fiyatlar = bist100['Close']
+            if isinstance(fiyatlar, pd.DataFrame):
+                fiyatlar = fiyatlar.iloc[:, 0]
+            bugun_fiyat = fiyatlar.iloc[-1]
+            iki_hafta_once_fiyat = fiyatlar.iloc[-10]
+            iki_ay_once_fiyat = fiyatlar.iloc[-40]
+            
+            xu100_2h = float(((bugun_fiyat - iki_hafta_once_fiyat) / iki_hafta_once_fiyat) * 100)
+            xu100_2a = float(((bugun_fiyat - iki_ay_once_fiyat) / iki_ay_once_fiyat) * 100)
+            return xu100_2h, xu100_2a
     except:
-        return 61.78
+        pass
+    return -5.57, -1.50
 
-otomatik_tufe = get_guncel_tufe()
+oto_2h, oto_2a = otomatik_xu100_getirileri()
 
 bugun = pd.Timestamp.today()
 fmt = "%d.%m.%Y"
@@ -32,11 +39,11 @@ iki_hafta_once = (bugun - pd.DateOffset(weeks=2)).strftime(fmt)
 iki_ay_once = (bugun - pd.DateOffset(months=2)).strftime(fmt)
 bir_yil_once = (bugun - pd.DateOffset(years=1)).strftime(fmt)
 
-# --- 2. YAN MENÜ: MAKRO GİRDİLERİ (OTOMATİK) ---
-st.sidebar.header("⚙️ Makro & Endeks Girdileri (Otomatik)")
-tufe_12 = st.sidebar.number_input(f"TÜFE(12) Yıllık % (Otomatik Güncel)", value=otomatik_tufe, format="%.2f")
-xu100_2a = st.sidebar.number_input(f"XU100 2-Aylık Getiri % ({iki_ay_once} - {bugun_str})", value=-1.50, format="%.2f")
-xu100_2h = st.sidebar.number_input(f"XU100 2-Haftalık Getiri % ({iki_hafta_once} - {bugun_str})", value=-5.57, format="%.2f")
+# --- 2. YAN MENÜ: MAKRO GİRDİLERİ ---
+st.sidebar.header("⚙️ Makro Girdiler (Otomatik & Güncel)")
+tufe_12 = st.sidebar.number_input(f"TÜFE(12) Yıllık %", value=31.75, format="%.2f")
+xu100_2a = st.sidebar.number_input(f"XU100 2-Aylık Getiri % ({iki_ay_once} - {bugun_str})", value=oto_2a, format="%.2f")
+xu100_2h = st.sidebar.number_input(f"XU100 2-Haftalık Getiri % ({iki_hafta_once} - {bugun_str})", value=oto_2h, format="%.2f")
 
 # --- 3. DOSYA YÜKLEME ---
 st.sidebar.header("📁 Fintables Veri Yükleme")
@@ -100,48 +107,47 @@ if file1 and file2:
     st.success(f"Toplam {len(df)} hisse içerisinden Temel Kriterleri geçen toplam hisse sayısı: **{len(df_temel)}**")
 
     if len(df_temel) > 0:
-        # --- 5. TEMELDEN GEÇEN TÜM HİSSELERİ GÖSTERME (Bilanço Durumuyla) ---
+        # Temelden geçen tüm hisseleri bilanço durumuyla göster
         st.markdown("### 📋 Temel Kriterleri Geçen Tüm Hisseler (Bilanço Durumları)")
         st.dataframe(df_temel[["Kod", "Bilanco_Durum", "ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"]])
 
-        # --- 6. TEKNİK KRİTERLER VE MA HESAPLAMA ---
-        st.info("🔄 Temelden geçen tüm hisselerin hareketli ortalamaları (MA20, MA75, MA200) hesaplanıyor ve karşılaştırılıyor...")
+        # --- 5. TEKNİK KRİTERLER VE MA HESAPLAMA (Yahoo Finance üzerinden anlık) ---
+        st.info("🔄 Temelden geçen tüm hisselerin hareketli ortalamaları (MA20, MA75, MA200) anlık çekiliyor...")
         
         teknik_asanadan_gecenler = []
         for idx, row in df_temel.iterrows():
             kod = str(row["Kod"]).strip() + ".IS"
             try:
                 hist = yf.download(kod, period="1y", progress=False)
-                if not hist.empty and len(hist) >= 200:
-                    close = hist['Close'].iloc[-1]
-                    if isinstance(close, pd.Series): close = close.iloc[0]
-                    ma20 = hist['Close'].rolling(20).mean().iloc[-1]
-                    ma75 = hist['Close'].rolling(75).mean().iloc[-1]
-                    ma200 = hist['Close'].rolling(200).mean().iloc[-1]
-                    if isinstance(ma20, pd.Series): ma20 = ma20.iloc[0]
-                    if isinstance(ma75, pd.Series): ma75 = ma75.iloc[0]
-                    if isinstance(ma200, pd.Series): ma200 = ma200.iloc[0]
+                if not hist.empty:
+                    close = hist['Close']
+                    if isinstance(close, pd.DataFrame):
+                        close = close.iloc[:, 0]
+                    if len(close) >= 200:
+                        ma20 = float(close.rolling(20).mean().iloc[-1])
+                        ma75 = float(close.rolling(75).mean().iloc[-1])
+                        ma200 = float(close.rolling(200).mean().iloc[-1])
 
-                    df_temel.loc[idx, 'MA20'] = round(float(ma20), 2)
-                    df_temel.loc[idx, 'MA75'] = round(float(ma75), 2)
-                    df_temel.loc[idx, 'MA200'] = round(float(ma200), 2)
+                        df_temel.loc[idx, 'MA20'] = round(ma20, 2)
+                        df_temel.loc[idx, 'MA75'] = round(ma75, 2)
+                        df_temel.loc[idx, 'MA200'] = round(ma200, 2)
 
-                    # ALFA V2.4 Teknik Kriteri: Mov(C,75) > Mov(C,200) and Mov(C,20) > Mov(C,75)
-                    if ma75 > ma200 and ma20 > ma75:
-                        teknik_asanadan_gecenler.append(idx)
+                        # Teknik Kriter: MA75 > MA200 ve MA20 > MA75
+                        if ma75 > ma200 and ma20 > ma75:
+                            teknik_asanadan_gecenler.append(idx)
             except Exception as e:
                 continue
 
         df_teknik = df_temel.loc[teknik_asanadan_gecenler].copy()
         
-        # Tüm temelin MA değerleri içeren tablosu
+        # Manuel kontrol için MA Karşılaştırma Tablosu
         st.markdown("### 🔍 Hareketli Ortalama (MA) Karşılaştırma Tablosu (Manuel Kontrol İçin)")
         st.dataframe(df_temel[["Kod", "Kapanis", "MA20", "MA75", "MA200", "Bilanco_Durum"]])
 
-        st.success(f"Teknik kriterleri ($MA_{20} > MA_{75} > MA_{200}$) sağlayan hisse sayısı: **{len(df_teknik)}**")
+        st.success(f"Teknik kriterleri sağlayan hisse sayısı: **{len(df_teknik)}**")
 
         if len(df_teknik) > 0:
-            # --- 7. SKORLAMA VE CEZA HESAPLAMA ---
+            # --- 6. SKORLAMA VE CEZA HESAPLAMA ---
             roe = df_teknik["ROE_0"]
             m6 = df_teknik["Getiri_6a"]
             m2 = df_teknik["Getiri_2a"]
@@ -170,7 +176,6 @@ if file1 and file2:
             negCeza = np.where(m1 < -10, -15, np.where(m1 < -5, -8, 0))
             ardisikCeza = np.where((m1 < 0) & (m2 < 0), -10, 0)
 
-            # Nihai Skor Formülü (ALFA V2.4)
             df_teknik["SKOR"] = (
                 (roeSkor * 0.30) + 
                 (buySkor * 0.20) + 
