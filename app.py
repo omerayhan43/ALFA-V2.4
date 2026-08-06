@@ -284,7 +284,6 @@ if st.session_state.df_merged is not None:
         st.markdown("### 🔍 Hisseler İçin Derinlemesine Teşhis ve Puanlama Paneli")
         st.markdown("İstediğiniz hisse kodunu seçerek temel filtrelerden geçip geçmediğini, takıldığı kriterleri, teknik MA durumunu ve modelden aldığı skor detaylarını inceleyebilirsiniz.")
         
-        # Anlık arama özellikli selectbox
         hisse_listesi = [""] + sorted(df["Kod"].dropna().astype(str).str.upper().unique().tolist())
         secilen_hisse = st.selectbox("Hisse Seçin / Arayın (Örn: CRDFA, EGEGY, FORTE)", options=hisse_listesi)
 
@@ -294,11 +293,18 @@ if st.session_state.df_merged is not None:
                 th = tek_hisse_df.iloc[0]
                 p_lim = float(8 + (th['ROE_0'] - 90) * 0.07 if th['ROE_0'] > 90 else 8)
                 
-                # Kriter Mantığı
-                c_a, c_b, c_c = th['Getiri_2a'] > oto_2a, th['ROE_0'] > tufe_12, th['NetBorc_FAVOK'] < 4
-                c_d, c_ee, c_f = th['PDDD'] < p_lim, th['Getiri_2h'] > (oto_2h - 10), th['NetSatisBuyume'] > 0
-                c_g, c_h, c_j = th['FAVOKBuyume'] > tufe_12, (th['BrutEFKBuyume'] > tufe_12) & (th['EFKBuyume'] > tufe_12), th['Getiri_1a'] > -15
-                c_k, c_teyit, c_roe_t = th['HAOran'] < 60, (th['EFK_0'] >= th['ef_EFK_1']) | (th['EFK_0'] >= th['ef_EFK_4']), (th['ROE_0'] >= th['ef_ROE_1']) | (th['ROE_0'] >= th['ef_ROE_4'])
+                c_a = bool(th['Getiri_2a'] > oto_2a)
+                c_b = bool(th['ROE_0'] > tufe_12)
+                c_c = bool(th['NetBorc_FAVOK'] < 4)
+                c_d = bool(th['PDDD'] < p_lim)
+                c_ee = bool(th['Getiri_2h'] > (oto_2h - 10))
+                c_f = bool(th['NetSatisBuyume'] > 0)
+                c_g = bool(th['FAVOKBuyume'] > tufe_12)
+                c_h = bool((th['BrutEFKBuyume'] > tufe_12) and (th['EFKBuyume'] > tufe_12))
+                c_j = bool(th['Getiri_1a'] > -15)
+                c_k = bool(th['HAOran'] < 60)
+                c_teyit = bool((th['EFK_0'] >= th['ef_EFK_1']) or (th['EFK_0'] >= th['ef_EFK_4']))
+                c_roe_t = bool((th['ROE_0'] >= th['ef_ROE_1']) or (th['ROE_0'] >= th['ef_ROE_4']))
                 
                 takilan_kriterler = []
                 if not c_b: takilan_kriterler.append("ROE > TÜFE")
@@ -312,109 +318,93 @@ if st.session_state.df_merged is not None:
                 if not c_j: takilan_kriterler.append("1A Getiri > -15")
                 if not c_k: takilan_kriterler.append("Halka Açıklık < 60")
 
-                # Skorlama Hesaplamaları
-                roe_val, m6_val, m2_val, m1_val, pddd_val = float(th['ROE_0']), float(th['Getiri_6a']), float(th['Getiri_2a']), float(th['Getiri_1a']), float(th['PDDD'])
-                eb_val, fb_val, sb_val = float(th['BrutEFKBuyume']), float(th['FAVOKBuyume']), float(th['NetSatisBuyume'])
-                r_skor, m_skor, m2_skor = (100 if roe_val > 50 else roe_val * 2), (100 if m6_val > 100 else m6_val), (100 if m2_val > 50 else m2_val * 2)
-                eb_s, fb_s, sb_s = (100 if eb_val > 50 else (eb_val * 2 if eb_val > 0 else 0)), (100 if fb_val > 50 else (fb_val * 2 if fb_val > 0 else 0)), (100 if sb_val > 50 else (sb_val * 2 if sb_val > 0 else 0))
-                b_skor = (eb_s + fb_s + sb_s) / 3
-                
-                # Sütunları Başlat
-                c1, c2, c3 = st.columns(3)
+                roe_val = float(th['ROE_0'])
+                m6_val = float(th['Getiri_6a'])
+                m2_val = float(th['Getiri_2a'])
+                m1_val = float(th['Getiri_1a'])
+                pddd_val = float(th['PDDD'])
+                eb_val = float(th['BrutEFKBuyume'])
+                fb_val = float(th['FAVOKBuyume'])
+                sb_val = float(th['NetSatisBuyume'])
 
-                with c1:
-                    st.markdown(f"#### 🏛️ Temel Analiz Kriterleri ({secilen_hisse})")
+                r_skor = float(100 if roe_val > 50 else roe_val * 2)
+                m_skor = float(100 if m6_val > 100 else m6_val)
+                m2_skor = float(100 if m2_val > 50 else m2_val * 2)
+                tr_ydz = float(((float(th['Kapanis']) - 10) / 10) * 100)
+                tr_skor = float(30 if tr_ydz > 30 else (0 if tr_ydz < 0 else tr_ydz))
+                p_skor = float(25 if pddd_val < 1.5 else (15 if pddd_val < 3 else (5 if pddd_val < 5 else (-10 if pddd_val > 6 else 0))))
+                
+                eb_s = float(100 if eb_val > 50 else (eb_val * 2 if eb_val > 0 else 0))
+                fb_s = float(100 if fb_val > 50 else (fb_val * 2 if fb_val > 0 else 0))
+                sb_s = float(100 if sb_val > 50 else (sb_val * 2 if sb_val > 0 else 0))
+                b_skor = float((eb_s + fb_s + sb_s) / 3)
+                
+                n_ceza = float(-15 if m1_val < -10 else (-8 if m1_val < -5 else 0))
+                ard_ceza = float(-10 if (m1_val < 0 and m2_val < 0) else 0)
+                
+                nihai_skor = float(
+                    (r_skor * 0.30) + (b_skor * 0.20) + (m_skor * 0.15) + 
+                    (m2_skor * 0.05) + (tr_skor * 0.18) + (p_skor * 0.12) + n_ceza + ard_ceza
+                )
+
+                # 3 Sütunlu Yan Yana Tasarım
+                col1, col2, col3 = st.columns(3)
+
+                with col1:
+                    st.markdown(f"#### 🏛️ Temel Analiz ({secilen_hisse})")
                     st.write(f"- ROE > TÜFE: {'✅ Geçti' if c_b else '❌ Kaldı'}")
                     st.write(f"- 2A Getiri > XU100: {'✅ Geçti' if c_a else '❌ Kaldı'}")
                     st.write(f"- 2H Getiri Şartı: {'✅ Geçti' if c_ee else '❌ Kaldı'}")
                     st.write(f"- PD/DD < Sınır: {'✅ Geçti' if c_d else '❌ Kaldı'}")
-                    st.write(f"- Net Borç / FAVÖK < 4: {'✅ Geçti' if c_c else '❌ Kaldı'}")
-                    st.write(f"- Net Satış Büyümesi > 0: {'✅ Geçti' if c_f else '❌ Kaldı'}")
-                    st.write(f"- Büyüme / Teyit: {'✅ Geçti' if (c_g or c_h or c_teyit) else '❌ Kaldı'}")
-                    st.write(f"- ROE Teyit Şartı: {'✅ Geçti' if c_roe_t else '❌ Kaldı'}")
+                    st.write(f"- Net Borç/FAVÖK: {'✅ Geçti' if c_c else '❌ Kaldı'}")
+                    st.write(f"- Net Satış Büyümesi: {'✅ Geçti' if c_f else '❌ Kaldı'}")
+                    st.write(f"- Büyüme/Teyit: {'✅ Geçti' if (c_g or c_h or c_teyit) else '❌ Kaldı'}")
+                    st.write(f"- ROE Teyit: {'✅ Geçti' if c_roe_t else '❌ Kaldı'}")
                     st.write(f"- 1A Getiri > -15: {'✅ Geçti' if c_j else '❌ Kaldı'}")
-                    st.write(f"- Halka Açıklık < 60: {'✅ Geçti' if c_k else '❌ Kaldı'}")
+                    st.write(f"- Halka Açıklık: {'✅ Geçti' if c_k else '❌ Kaldı'}")
 
-                with c2:
-                    st.markdown("#### 🎯 Hissenin Sıralama Skoru")
-                    # (Burada nihai_skor ve alt kalemlerini yazdır)
-                    # Basitçe nihai_skor değişkenini yukarıda hesaplayıp buraya yazdırabilirsin
-                    st.write(f"- ROE Katkısı: {(r_skor * 0.30):.2f}")
-                    st.write(f"- Büyüme Katkısı: {(b_skor * 0.20):.2f}")
-                    st.write(f"- Momentum Katkısı: {(m_skor * 0.15):.2f}")
+                with col2:
+                    st.markdown(f"#### 🎯 Skor: {nihai_skor:.2f}")
+                    st.write(f"- ROE Katkısı (%30): {(r_skor * 0.30):.2f}")
+                    st.write(f"- Büyüme Katkısı (%20): {(b_skor * 0.20):.2f}")
+                    st.write(f"- Trend Katkısı (%18): {(tr_skor * 0.18):.2f}")
+                    st.write(f"- Momentum Katkısı (%15): {(m_skor * 0.15):.2f}")
+                    st.write(f"- PD/DD Katkısı (%12): {(p_skor * 0.12):.2f}")
 
-                with c3:
-                    st.markdown(f"#### 📈 Teknik Analiz Detayları ({secilen_hisse})")
-                    h_yf = yf.download(secilen_hisse + ".IS", period="1y", progress=False)
-                    if not h_yf.empty:
-                        if isinstance(h_yf.columns, pd.MultiIndex): h_yf.columns = h_yf.columns.get_level_values(0)
-                        h_yf['MA20'], h_yf['MA75'] = h_yf['Close'].rolling(20).mean(), h_yf['Close'].rolling(75).mean()
-                        st.line_chart(h_yf[['Close', 'MA20', 'MA75']])
-                        
-                        m20, m75 = float(h_yf['MA20'].iloc[-1]), float(h_yf['MA75'].iloc[-1])
-                        st.write(f"- MA20: {m20:.2f} | MA75: {m75:.2f}")
+                with col3:
+                    st.markdown(f"#### 📈 Teknik Detaylar")
+                    try:
+                        h_yf = yf.download(secilen_hisse + ".IS", period="1y", progress=False)
+                        if not h_yf.empty:
+                            if isinstance(h_yf.columns, pd.MultiIndex): h_yf.columns = h_yf.columns.get_level_values(0)
+                            h_yf = h_yf.sort_index().dropna()
+                            cls = h_yf['Close']
+                            if isinstance(cls, pd.DataFrame): cls = cls.iloc[:, 0]
+                            if len(cls) >= 200:
+                                m20 = float(cls.rolling(20).mean().iloc[-1])
+                                m75 = float(cls.rolling(75).mean().iloc[-1])
+                                m200 = float(cls.rolling(200).mean().iloc[-1])
+                                teknik_gecti = bool((m75 > m200) and (m20 > m75))
+                                st.write(f"- **Kapanış:** {float(th['Kapanis']):.2f}")
+                                st.write(f"- **MA20:** {m20:.2f}")
+                                st.write(f"- **MA75:** {m75:.2f}")
+                                st.write(f"- **MA200:** {m200:.2f}")
+                                st.write(f"- **Teknik Kural:** {'✅ Sağlıyor' if teknik_gecti else '❌ Sağlamıyor'}")
+                            else:
+                                st.warning("Yeterli fiyat geçmişi yok.")
+                        else:
+                            st.warning("Yahoo Finance verisi alınamadı.")
+                    except Exception as e:
+                        st.error(f"Teknik hata: {e}")
 
-                # ALT KISIM: HATA LİSTESİ
+                # En Altta Hata Listesi
                 if takilan_kriterler:
                     st.markdown("---")
                     st.warning("Hisse aşağıdaki kriterleri sağlamadığı için filtrelerden geçemedi;")
                     for kriter in takilan_kriterler:
                         st.write(f"• {kriter}")
                 else:
-                    st.success("🎉 Tebrikler! Hisse tüm filtrelerden başarıyla geçti.")
-
-                                roe_val = float(th['ROE_0'])
-                                m6_val = float(th['Getiri_6a'])
-                                m2_val = float(th['Getiri_2a'])
-                                m1_val = float(th['Getiri_1a'])
-                                pddd_val = float(th['PDDD'])
-                                eb_val = float(th['BrutEFKBuyume'])
-                                fb_val = float(th['FAVOKBuyume'])
-                                sb_val = float(th['NetSatisBuyume'])
-
-                                r_skor = float(100 if roe_val > 50 else roe_val * 2)
-                                m_skor = float(100 if m6_val > 100 else m6_val)
-                                m2_skor = float(100 if m2_val > 50 else m2_val * 2)
-                                tr_ydz = float(((float(th['Kapanis']) - m75) / m75) * 100)
-                                tr_skor = float(30 if tr_ydz > 30 else (0 if tr_ydz < 0 else tr_ydz))
-                                p_skor = float(25 if pddd_val < 1.5 else (15 if pddd_val < 3 else (5 if pddd_val < 5 else (-10 if pddd_val > 6 else 0))))
-                                
-                                eb_s = float(100 if eb_val > 50 else (eb_val * 2 if eb_val > 0 else 0))
-                                fb_s = float(100 if fb_val > 50 else (fb_val * 2 if fb_val > 0 else 0))
-                                sb_s = float(100 if sb_val > 50 else (sb_val * 2 if sb_val > 0 else 0))
-                                b_skor = float((eb_s + fb_s + sb_s) / 3)
-                                
-                                n_ceza = float(-15 if m1_val < -10 else (-8 if m1_val < -5 else 0))
-                                ard_ceza = float(-10 if (m1_val < 0 and m2_val < 0) else 0)
-                                
-                                nihai_skor = float(
-                                    (r_skor * 0.30) + (b_skor * 0.20) + (m_skor * 0.15) + 
-                                    (m2_skor * 0.05) + (trendSkor * 0.18 if 'trendSkor' in locals() else tr_skor * 0.18) + (p_skor * 0.12) + n_ceza + ard_ceza
-                                )
-                                
-                                st.markdown("---")
-                                st.markdown(f"### 🎯 **Hissenin Sıralama Skoru: {nihai_skor:.2f}**")
-                                st.write(f"- ROE Katkısı (%30): {(r_skor * 0.30):.2f}")
-                                st.write(f"- Büyüme Katkısı (%20): {(b_skor * 0.20):.2f}")
-                                st.write(f"- Trend / MA Katkısı (%18): {(tr_skor * 0.18):.2f}")
-                                st.write(f"- Momentum Katkısı (%15): {(m_skor * 0.15):.2f}")
-                                st.write(f"- PD/DD Katkısı (%12): {(p_skor * 0.12):.2f}")
-                                
-                                aktif_cezalar = []
-                                if n_ceza != 0: aktif_cezalar.append(f"Kısa Vade: {n_ceza:.2f}")
-                                if ard_ceza != 0: aktif_cezalar.append(f"Ardışık: {ard_ceza:.2f}")
-
-                                if aktif_cezalar:
-                                    ceza_mesaji = "Uygulanan Cezalar;\n"
-                                    for ceza in aktif_cezalar:
-                                        ceza_mesaji += f"\n- {ceza}"
-                                    st.warning(ceza_mesaji)
-                            else:
-                                st.warning("Yeterli fiyat geçmişi (200 gün) bulunamadı.")
-                        else:
-                            st.warning("Yahoo Finance verisi alınamadı.")
-                    except Exception as e:
-                        st.error(f"Teknik veri çekilirken hata oluştu: {e}")
+                    st.success("🎉 Tebrikler! Hisse tüm temel ve teknik filtrelerden başarıyla geçti.")
             else:
                 st.warning(f"'{secilen_hisse}' kodlu hisse Fintables dosyalarında bulunamadı.")
 else:
