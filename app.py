@@ -119,28 +119,30 @@ if file1 and file2:
                 .style.format(precision=2, subset=["ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"])
             )
 
-            st.info("🔄 Temelden geçen tüm hisselerin hareketli ortalamaları (MA20, MA75, MA200) anlık çekiliyor...")
-            
+            # Dinamik Durum Çubuğu (Spinner & Success)
             teknik_asanadan_gecenler = []
-            for idx, row in df_temel.iterrows():
-                kod = str(row["Kod"]).strip() + ".IS"
-                try:
-                    hist = yf.download(kod, period="1y", progress=False)
-                    if not hist.empty:
-                        hist = hist.sort_index().dropna()
-                        close = hist['Close']
-                        if isinstance(close, pd.DataFrame): close = close.iloc[:, 0]
-                        if len(close) >= 200:
-                            ma20 = float(close.rolling(20).mean().iloc[-1])
-                            ma75 = float(close.rolling(75).mean().iloc[-1])
-                            ma200 = float(close.rolling(200).mean().iloc[-1])
-                            df_temel.loc[idx, 'MA20'] = round(ma20, 2)
-                            df_temel.loc[idx, 'MA75'] = round(ma75, 2)
-                            df_temel.loc[idx, 'MA200'] = round(ma200, 2)
-                            if ma75 > ma200 and ma20 > ma75:
-                                teknik_asanadan_gecenler.append(idx)
-                except:
-                    continue
+            with st.spinner("🔄 Temelden geçen tüm hisselerin hareketli ortalamaları (MA20, MA75, MA200) anlık çekiliyor..."):
+                for idx, row in df_temel.iterrows():
+                    kod = str(row["Kod"]).strip() + ".IS"
+                    try:
+                        hist = yf.download(kod, period="1y", progress=False)
+                        if not hist.empty:
+                            hist = hist.sort_index().dropna()
+                            close = hist['Close']
+                            if isinstance(close, pd.DataFrame): close = close.iloc[:, 0]
+                            if len(close) >= 200:
+                                ma20 = float(close.rolling(20).mean().iloc[-1])
+                                ma75 = float(close.rolling(75).mean().iloc[-1])
+                                ma200 = float(close.rolling(200).mean().iloc[-1])
+                                df_temel.loc[idx, 'MA20'] = round(ma20, 2)
+                                df_temel.loc[idx, 'MA75'] = round(ma75, 2)
+                                df_temel.loc[idx, 'MA200'] = round(ma200, 2)
+                                if ma75 > ma200 and ma20 > ma75:
+                                    teknik_asanadan_gecenler.append(idx)
+                    except:
+                        continue
+            
+            st.success("✅ Veriler başarıyla çekildi.")
 
             df_teknik = df_temel.loc[teknik_asanadan_gecenler].copy()
             
