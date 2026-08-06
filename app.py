@@ -15,7 +15,7 @@ st.markdown("Temel + Teknik Filtreleme -> Ağırlıklı Skorlama -> İlk 5 Hisse
 def otomatik_xu100_getirileri():
     try:
         df = yf.download("XU100.IS", period="3mo", progress=False)
-        if df.empty: return -1.98, 0.76 # Manuel doğrulanan değerler
+        if df.empty: return -1.98, 0.76 
         
         df.index = pd.to_datetime(df.index)
         bugun = pd.Timestamp.today()
@@ -32,7 +32,7 @@ def otomatik_xu100_getirileri():
         xu100_2h = ((price_today - price_t2w) / price_t2w) * 100
         xu100_2a = ((price_today - price_t2m) / price_t2m) * 100
         
-        return xu100_2h, xu100_2a
+        return float(xu100_2h), float(xu100_2a)
     except:
         return -1.98, 0.76
 
@@ -55,7 +55,6 @@ file1 = st.sidebar.file_uploader("1. Temel Analiz & Fiyat Dosyası", type=["xlsx
 file2 = st.sidebar.file_uploader("2. Eski Dönemler Dosyası (1)", type=["xlsx", "xls"])
 
 if file1 and file2:
-    # Veri Omurgası & Birleştirme
     df1 = pd.read_excel(file1).iloc[:, :23]
     df1.columns = [
         "Kod", "ROE_0", "ROE_1", "ROE_4", "BrutEFK_0", "BrutEFK_1", 
@@ -70,7 +69,6 @@ if file1 and file2:
 
     df = pd.merge(df1, df2, on="Kod", how="left").fillna(0)
 
-    # Bilanço Geldi mi? Kontrolü & Kaydırma Mantığı
     bilanco_gelmedi = (
         (df["BrutEFK_0"] == df["BrutEFK_1"]) & 
         (df["EFK_0"] == df["EFK_1"]) & 
@@ -198,21 +196,21 @@ if file1 and file2:
             tek_hisse_df = df[df["Kod"].str.upper() == secilen_hisse]
             if not tek_hisse_df.empty:
                 th = tek_hisse_df.iloc[0]
-                p_lim = 8 + (th['ROE_0'] - 90) * 0.07 if th['ROE_0'] > 90 else 8
+                p_lim = float(8 + (th['ROE_0'] - 90) * 0.07 if th['ROE_0'] > 90 else 8)
                 
                 # Temel Kurallar Kontrolü
-                c_a = th['Getiri_2a'] > xu100_2a
-                c_b = th['ROE_0'] > tufe_12
-                c_c = th['NetBorc_FAVOK'] < 4
-                c_d = th['PDDD'] < p_lim
-                c_ee = th['Getiri_2h'] > (xu100_2h - 10)
-                c_f = th['NetSatisBuyume'] > 0
-                c_g = th['FAVOKBuyume'] > tufe_12
-                c_h = (th['BrutEFKBuyume'] > tufe_12) and (th['EFKBuyume'] > tufe_12)
-                c_j = th['Getiri_1a'] > -15
-                c_k = th['HAOran'] < 60
-                c_teyit = (th['EFK_0'] >= th['ef_EFK_1']) or (th['EFK_0'] >= th['ef_EFK_4'])
-                c_roe_t = (th['ROE_0'] >= th['ef_ROE_1']) or (th['ROE_0'] >= th['ef_ROE_4'])
+                c_a = bool(th['Getiri_2a'] > xu100_2a)
+                c_b = bool(th['ROE_0'] > tufe_12)
+                c_c = bool(th['NetBorc_FAVOK'] < 4)
+                c_d = bool(th['PDDD'] < p_lim)
+                c_ee = bool(th['Getiri_2h'] > (xu100_2h - 10))
+                c_f = bool(th['NetSatisBuyume'] > 0)
+                c_g = bool(th['FAVOKBuyume'] > tufe_12)
+                c_h = bool((th['BrutEFKBuyume'] > tufe_12) and (th['EFKBuyume'] > tufe_12))
+                c_j = bool(th['Getiri_1a'] > -15)
+                c_k = bool(th['HAOran'] < 60)
+                c_teyit = bool((th['EFK_0'] >= th['ef_EFK_1']) or (th['EFK_0'] >= th['ef_EFK_4']))
+                c_roe_t = bool((th['ROE_0'] >= th['ef_ROE_1']) or (th['ROE_0'] >= th['ef_ROE_4']))
                 
                 temel_gecti = secilen_hisse in df_temel['Kod'].values
 
@@ -233,16 +231,16 @@ if file1 and file2:
 
                 with col1:
                     st.markdown(f"#### 🏛️ Temel Analiz Kriterleri ({secilen_hisse})")
-                    st.write(f"- **ROE > TÜFE** ({th['ROE_0']:.2f} > {tufe_12}): {'✅ Geçti' if c_b else '❌ Kaldı'}")
-                    st.write(f"- **2A Getiri > XU100** ({th['Getiri_2a']:.2f} > {xu100_2a:.2f}): {'✅ Geçti' if c_a else '❌ Kaldı'}")
-                    st.write(f"- **2H Getiri Şartı** ({th['Getiri_2h']:.2f} > {xu100_2h - 10:.2f}): {'✅ Geçti' if c_ee else '❌ Kaldı'}")
-                    st.write(f"- **PD/DD < Sınır** ({th['PDDD']:.2f} < {p_lim:.2f}): {'✅ Geçti' if c_d else '❌ Kaldı'}")
-                    st.write(f"- **Net Borç / FAVÖK < 4** ({th['NetBorc_FAVOK']:.2f}): {'✅ Geçti' if c_c else '❌ Kaldı'}")
-                    st.write(f"- **Net Satış Büyümesi > 0** ({th['NetSatisBuyume']:.2f}): {'✅ Geçti' if c_f else '❌ Kaldı'}")
+                    st.write(f"- **ROE > TÜFE** ({float(th['ROE_0']):.2f} > {tufe_12}): {'✅ Geçti' if c_b else '❌ Kaldı'}")
+                    st.write(f"- **2A Getiri > XU100** ({float(th['Getiri_2a']):.2f} > {xu100_2a:.2f}): {'✅ Geçti' if c_a else '❌ Kaldı'}")
+                    st.write(f"- **2H Getiri Şartı** ({float(th['Getiri_2h']):.2f} > {xu100_2h - 10:.2f}): {'✅ Geçti' if c_ee else '❌ Kaldı'}")
+                    st.write(f"- **PD/DD < Sınır** ({float(th['PDDD']):.2f} < {p_lim:.2f}): {'✅ Geçti' if c_d else '❌ Kaldı'}")
+                    st.write(f"- **Net Borç / FAVÖK < 4** ({float(th['NetBorc_FAVOK']):.2f}): {'✅ Geçti' if c_c else '❌ Kaldı'}")
+                    st.write(f"- **Net Satış Büyümesi > 0** ({float(th['NetSatisBuyume']):.2f}): {'✅ Geçti' if c_f else '❌ Kaldı'}")
                     st.write(f"- **Büyüme / Teyit Kriterleri:** {'✅ Geçti' if (c_g or c_h or c_teyit) else '❌ Kaldı'}")
                     st.write(f"- **ROE Teyit Şartı:** {'✅ Geçti' if c_roe_t else '❌ Kaldı'}")
-                    st.write(f"- **1A Getiri > -15** ({th['Getiri_1a']:.2f}): {'✅ Geçti' if c_j else '❌ Kaldı'}")
-                    st.write(f"- **Halka Açıklık < 60** ({th['HAOran']:.2f}): {'✅ Geçti' if c_k else '❌ Kaldı'}")
+                    st.write(f"- **1A Getiri > -15** ({float(th['Getiri_1a']):.2f}): {'✅ Geçti' if c_j else '❌ Kaldı'}")
+                    st.write(f"- **Halka Açıklık < 60** ({float(th['HAOran']):.2f}): {'✅ Geçti' if c_k else '❌ Kaldı'}")
 
                 with col2:
                     st.markdown(f"#### 📈 Teknik Analiz & Skor Detayları ({secilen_hisse})")
@@ -257,11 +255,11 @@ if file1 and file2:
                                 m75 = float(cls.rolling(75).mean().iloc[-1])
                                 m200 = float(cls.rolling(200).mean().iloc[-1])
                                 
-                                teknik_gecti = (m75 > m200) and (m20 > m75)
+                                teknik_gecti = bool((m75 > m200) and (m20 > m75))
                                 if not teknik_gecti:
                                     takilan_kriterler.append("Teknik MA Kuralı (MA75 > MA200 ve MA20 > MA75)")
 
-                                st.write(f"- **Güncel Kapanış:** {th['Kapanis']}")
+                                st.write(f"- **Güncel Kapanış:** {float(th['Kapanis']):.2f}")
                                 st.write(f"- **MA20:** {m20:.2f}")
                                 st.write(f"- **MA75:** {m75:.2f}")
                                 st.write(f"- **MA200:** {m200:.2f}")
@@ -272,25 +270,37 @@ if file1 and file2:
                                     takilanlar_str = ", ".join(takilan_kriterler)
                                     st.warning(f'⚠️ Uyarı: Hisse "{takilanlar_str}" kriterini veya kriterlerini sağlamadığı için filtreden geçemedi.')
                                 else:
-                                    st.success('🎉 Tebrikler! Hisse tüm temel ve teknik filtrelerden başarıyla geçti.')
+                                    st.success('🎉 Tebrikler! Hisse tüm temel dan teknik filtrelerden başarıyla geçti.')
 
-                                # Skor Hesaplama Detayı (Her durumda gösterilir)
-                                r_skor = 100 if th['ROE_0'] > 50 else th['ROE_0'] * 2
-                                m_skor = 100 if th['Getiri_6a'] > 100 else th['Getiri_6a']
-                                m2_skor = 100 if th['Getiri_2a'] > 50 else th['Getiri_2a'] * 2
-                                tr_ydz = ((th['Kapanis'] - m75) / m75) * 100
-                                tr_skor = 30 if tr_ydz > 30 else (0 if tr_ydz < 0 else tr_ydz)
-                                p_skor = 25 if th['PDDD'] < 1.5 else (15 if th['PDDD'] < 3 else (5 if th['PDDD'] < 5 else (-10 if th['PDDD'] > 6 else 0)))
+                                # Skor Hesaplama Detayı (Güvenli Tip Dönüşümleriyle)
+                                roe_val = float(th['ROE_0'])
+                                m6_val = float(th['Getiri_6a'])
+                                m2_val = float(th['Getiri_2a'])
+                                m1_val = float(th['Getiri_1a'])
+                                pddd_val = float(th['PDDD'])
+                                eb_val = float(th['BrutEFKBuyume'])
+                                fb_val = float(th['FAVOKBuyume'])
+                                sb_val = float(th['NetSatisBuyume'])
+
+                                r_skor = float(100 if roe_val > 50 else roe_val * 2)
+                                m_skor = float(100 if m6_val > 100 else m6_val)
+                                m2_skor = float(100 if m2_val > 50 else m2_val * 2)
+                                tr_ydz = float(((float(th['Kapanis']) - m75) / m75) * 100)
+                                tr_skor = float(30 if tr_ydz > 30 else (0 if tr_ydz < 0 else tr_ydz))
+                                p_skor = float(25 if pddd_val < 1.5 else (15 if pddd_val < 3 else (5 if pddd_val < 5 else (-10 if pddd_val > 6 else 0))))
                                 
-                                eb_s = 100 if th['BrutEFKBuyume'] > 50 else (th['BrutEFKBuyume'] * 2 if th['BrutEFKBuyume'] > 0 else 0)
-                                fb_s = 100 if th['FAVOKBuyume'] > 50 else (th['FAVOKBuyume'] * 2 if th['FAVOKBuyume'] > 0 else 0)
-                                sb_s = 100 if th['NetSatisBuyume'] > 50 else (th['NetSatisBuyume'] * 2 if th['NetSatisBuyume'] > 0 else 0)
-                                b_skor = (eb_s + fb_s + sb_s) / 3
+                                eb_s = float(100 if eb_val > 50 else (eb_val * 2 if eb_val > 0 else 0))
+                                fb_s = float(100 if fb_val > 50 else (fb_val * 2 if fb_val > 0 else 0))
+                                sb_s = float(100 if sb_val > 50 else (sb_val * 2 if sb_val > 0 else 0))
+                                b_skor = float((eb_s + fb_s + sb_s) / 3)
                                 
-                                n_ceza = -15 if th['Getiri_1a'] < -10 else (-8 if th['Getiri_1a'] < -5 else 0)
-                                ard_ceza = -10 if (th['Getiri_1a'] < 0 and th['Getiri_2a'] < 0) else 0
+                                n_ceza = float(-15 if m1_val < -10 else (-8 if m1_val < -5 else 0))
+                                ard_ceza = float(-10 if (m1_val < 0 and m2_val < 0) else 0)
                                 
-                                nihai_skor = (r_skor * 0.30) + (b_skor * 0.20) + (momentumSkor * 0.15 if 'momentumSkor' in locals() else m_skor * 0.15) + (m2_skor * 0.05) + (tr_skor * 0.18) + (p_skor * 0.12) + n_ceza + ard_ceza
+                                nihai_skor = float(
+                                    (r_skor * 0.30) + (b_skor * 0.20) + (m_skor * 0.15) + 
+                                    (m2_skor * 0.05) + (tr_skor * 0.18) + (p_skor * 0.12) + n_ceza + ard_ceza
+                                )
                                 
                                 st.markdown("---")
                                 st.markdown(f"### 🎯 **Hissenin Sıralama Skoru: {nihai_skor:.2f}**")
