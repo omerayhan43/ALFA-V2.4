@@ -266,7 +266,9 @@ if st.session_state.df_merged is not None:
         st.markdown("### 🔍 Hisseler İçin Derinlemesine Teşhis ve Puanlama Paneli")
         st.markdown("İstediğiniz hisse kodunu yazarak temel filtrelerden geçip geçmediğini, takıldığı kriterleri, teknik MA durumunu ve modelden aldığı skor detaylarını inceleyebilirsiniz.")
         
-        secilen_hisse = st.text_input("Hisse Kodunu Girin (Örn: CRDFA, EGEGY, FORTE)", "").upper().strip()
+        # Otomatik anlık arama (Enter gerektirmeyen selectbox)
+        hisse_listesi = [""] + sorted(df["Kod"].dropna().astype(str).str.upper().unique().tolist())
+        secilen_hisse = st.selectbox("Hisse Seçin / Arayın (Örn: CRDFA, EGEGY, FORTE)", options=hisse_listesi)
 
         if secilen_hisse:
             tek_hisse_df = df[df["Kod"].str.upper() == secilen_hisse]
