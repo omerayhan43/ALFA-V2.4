@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import datetime
 import yfinance as yf
-import plotly.graph_objects as go
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="ALFA V2.4 Borsa Algoritma Modeli", layout="wide")
@@ -160,9 +159,8 @@ if menu_secim == "📁 Veri Yönetimi (Excel Yükle)":
 # --- 4. HAREKETLİ ORTALAMA İNCELEME PANELİ (BAĞIMSIZ ÇALIŞIR) ---
 elif menu_secim == "📈 Hareketli Ortalama İnceleme":
     st.markdown("### 📈 Hareketli Ortalama ve Trend İnceleme Paneli")
-    st.markdown("İstediğiniz hissenin fiyat hareketlerini ve MA20, MA75, MA200 ortalamalarını renkli, interaktif bir grafik üzerinde inceleyin.")
+    st.markdown("İstediğiniz hissenin fiyat hareketlerini ve MA20, MA75, MA200 ortalamalarını grafik üzerinde inceleyin.")
     
-    # Otomatik tamamlama için hisse listesini hazırla
     if st.session_state.df_merged is not None:
         hisse_havuzu = sorted(st.session_state.df_merged["Kod"].dropna().astype(str).str.upper().unique().tolist())
     else:
@@ -184,35 +182,22 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 cls = h_yf['Close']
                 if isinstance(cls, pd.DataFrame): cls = cls.iloc[:, 0]
                 
-                # Hareketli Ortalamaların Hesaplanması
+                # MA Hesaplamaları
                 h_yf['MA20'] = cls.rolling(20).mean()
                 h_yf['MA75'] = cls.rolling(75).mean()
                 h_yf['MA200'] = cls.rolling(200).mean()
                 
-                # Plotly İnteraktif Grafik Oluşturma
-                fig = go.Figure()
+                # Streamlit Yerleşik Grafik Çizimi
+                df_chart = pd.DataFrame({
+                    'Kapanış (Fiyat)': cls,
+                    'MA20': h_yf['MA20'],
+                    'MA75': h_yf['MA75'],
+                    'MA200': h_yf['MA200']
+                })
                 
-                # Fiyat Çizgisi (Koyu Mavi)
-                fig.add_trace(go.Scatter(x=h_yf.index, y=cls, mode='lines', name='Kapanış (Fiyat)', line=dict(color='#1f77b4', width=2)))
-                # MA20 (Camgöbeği)
-                fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['MA20'], mode='lines', name='MA20', line=dict(color='#17becf', width=1.5)))
-                # MA75 (Turuncu)
-                fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['MA75'], mode='lines', name='MA75', line=dict(color='#ff7f0e', width=1.5)))
-                # MA200 (Kırmızı)
-                fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['MA200'], mode='lines', name='MA200', line=dict(color='#d62728', width=2)))
+                st.line_chart(df_chart)
                 
-                fig.update_layout(
-                    title=f"{secilen_hisse} - Detaylı Fiyat ve MA Trend Analizi",
-                    xaxis_title="Tarih",
-                    yaxis_title="Fiyat (TL)",
-                    height=550,
-                    hovermode="x unified",
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Son Fiyat ve MA Değerlerinin Renk Kodlu Gösterimi
+                # Değer Metrik Kartları
                 son_fiyat = float(cls.iloc[-1])
                 son_ma20 = float(h_yf['MA20'].iloc[-1]) if not pd.isna(h_yf['MA20'].iloc[-1]) else 0
                 son_ma75 = float(h_yf['MA75'].iloc[-1]) if not pd.isna(h_yf['MA75'].iloc[-1]) else 0
