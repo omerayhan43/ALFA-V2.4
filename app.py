@@ -187,7 +187,7 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 h_yf['MA75'] = cls.rolling(75).mean()
                 h_yf['MA200'] = cls.rolling(200).mean()
                 
-                # Streamlit Yerleşik Grafik Çizimi
+                # Streamlit Yerleşik Grafik Çizimi Veri Seti
                 df_chart = pd.DataFrame({
                     'Kapanış (Fiyat)': cls,
                     'MA20': h_yf['MA20'],
@@ -195,44 +195,48 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     'MA200': h_yf['MA200']
                 })
                 
-                st.line_chart(df_chart)
-                
-                # Değer Metrik Kartları
+                # Son Değerler
                 son_fiyat = float(cls.iloc[-1])
                 son_ma20 = float(h_yf['MA20'].iloc[-1]) if not pd.isna(h_yf['MA20'].iloc[-1]) else 0
                 son_ma75 = float(h_yf['MA75'].iloc[-1]) if not pd.isna(h_yf['MA75'].iloc[-1]) else 0
                 son_ma200 = float(h_yf['MA200'].iloc[-1]) if not pd.isna(h_yf['MA200'].iloc[-1]) else 0
                 
-                st.markdown("#### 📊 Güncel Fiyat & MA Eşleşme Değerleri")
-                c_fiy, c_ma20, c_ma75, c_ma200 = st.columns(4)
+                # YAN YANA DÜZEN (Grafik Solda, Değer Kartları Sağda)
+                col_chart, col_metrics = st.columns([3.5, 1])
                 
-                c_fiy.markdown(f"""
-                <div style="background-color: #e8f4f8; border-left: 5px solid #1f77b4; padding: 10px; border-radius: 5px;">
-                    <span style="font-size: 13px; color: #1f77b4; font-weight: bold;">Kapanış Fiyatı</span><br>
-                    <span style="font-size: 20px; font-weight: bold;">{son_fiyat:.2f} TL</span>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                c_ma20.markdown(f"""
-                <div style="background-color: #e0f7fa; border-left: 5px solid #17becf; padding: 10px; border-radius: 5px;">
-                    <span style="font-size: 13px; color: #00838f; font-weight: bold;">MA20 Değeri</span><br>
-                    <span style="font-size: 20px; font-weight: bold;">{son_ma20:.2f} TL</span>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                c_ma75.markdown(f"""
-                <div style="background-color: #fff3e0; border-left: 5px solid #ff7f0e; padding: 10px; border-radius: 5px;">
-                    <span style="font-size: 13px; color: #e65100; font-weight: bold;">MA75 Değeri</span><br>
-                    <span style="font-size: 20px; font-weight: bold;">{son_ma75:.2f} TL</span>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                c_ma200.markdown(f"""
-                <div style="background-color: #ffebee; border-left: 5px solid #d62728; padding: 10px; border-radius: 5px;">
-                    <span style="font-size: 13px; color: #c62828; font-weight: bold;">MA200 Değeri</span><br>
-                    <span style="font-size: 20px; font-weight: bold;">{son_ma200:.2f} TL</span>
-                </div>
-                """, unsafe_allow_html=True)
+                with col_chart:
+                    st.line_chart(df_chart, height=420)
+                    
+                with col_metrics:
+                    st.markdown("##### 📊 Güncel Değerler")
+                    
+                    st.markdown(f"""
+                    <div style="background-color: #e8f4f8; border-left: 5px solid #1f77b4; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                        <span style="font-size: 12px; color: #1f77b4; font-weight: bold;">Kapanış Fiyatı</span><br>
+                        <span style="font-size: 18px; font-weight: bold;">{son_fiyat:.2f} TL</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    st.markdown(f"""
+                    <div style="background-color: #e0f7fa; border-left: 5px solid #17becf; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                        <span style="font-size: 12px; color: #00838f; font-weight: bold;">MA20 Değeri</span><br>
+                        <span style="font-size: 18px; font-weight: bold;">{son_ma20:.2f} TL</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    st.markdown(f"""
+                    <div style="background-color: #fff3e0; border-left: 5px solid #ff7f0e; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                        <span style="font-size: 12px; color: #e65100; font-weight: bold;">MA75 Değeri</span><br>
+                        <span style="font-size: 18px; font-weight: bold;">{son_ma75:.2f} TL</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    st.markdown(f"""
+                    <div style="background-color: #ffebee; border-left: 5px solid #d62728; padding: 10px; border-radius: 5px;">
+                        <span style="font-size: 12px; color: #c62828; font-weight: bold;">MA200 Değeri</span><br>
+                        <span style="font-size: 18px; font-weight: bold;">{son_ma200:.2f} TL</span>
+                    </div>
+                    """, unsafe_allow_html=True)
                 
             else:
                 st.warning("Yahoo Finance üzerinden bu hisse için fiyat verisi çekilemedi.")
