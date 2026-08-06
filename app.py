@@ -83,7 +83,12 @@ st.sidebar.markdown("---")
 
 menu_secim = st.sidebar.radio(
     "Navigasyon",
-    ["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli", "📁 Veri Yönetimi (Excel Yükle)"],
+    [
+        "📊 Radar & Taramalar", 
+        "🔍 Hisse Teşhis Paneli", 
+        "📈 Hareketli Ortalama İnceleme", 
+        "📁 Veri Yönetimi (Excel Yükle)"
+    ],
     label_visibility="collapsed"
 )
 
@@ -410,3 +415,72 @@ if st.session_state.df_merged is not None:
 else:
     if menu_secim != "📁 Veri Yönetimi (Excel Yükle)":
         st.warning("👈 Lütfen sol menüden **'📁 Veri Yönetimi (Excel Yükle)'** seçeneğine tıklayarak dosyalarınızı yükleyin.")
+    # --- YENİ: HAREKETLİ ORTALAMA İNCELEME PANELİ ---
+    elif menu_secim == "📈 Hareketli Ortalama İnceleme":
+        st.markdown("### 📈 Hareketli Ortalama ve Trend İnceleme Paneli")
+        st.markdown("İstediğiniz hissenin fiyat hareketlerini ve MA20, MA75, MA200 ortalamalarını renkli, interaktif bir grafik üzerinde inceleyin.")
+        
+        # Anlık arama selectbox
+        hisse_listesi = [""] + sorted(df["Kod"].dropna().astype(str).str.upper().unique().tolist())
+        secilen_hisse = st.selectbox("İncelenecek Hisseyi Seçin:", options=hisse_listesi, key="ma_inceleme_select")
+
+        if secilen_hisse:
+            try:
+                import plotly.graph_objects as go
+                
+                h_yf = yf.download(secilen_hisse + ".IS", period="1y", progress=False)
+                if not h_yf.empty:
+                    if isinstance(h_yf.columns, pd.MultiIndex):
+                        h_yf.columns = h_yf.columns.get_level_values(0)
+                    h_yf = h_yf.sort_index().dropna()
+                    
+                    cls = h_yf['Close']
+                    if isinstance(cls, pd.DataFrame): cls = cls.iloc[:, 0]
+                    
+                    # Hareketli Ortalamalar
+                    h_yf['MA20'] = cls.rolling(20).mean()
+                    h_yf['MA75'] = cls.rolling(75).mean()
+                    h_yf['MA200'] = cls.rolling(200).mean()
+                    
+                    # Plotly Grafik Yapısı (Renk Kodlu ve Net Çizgiler)
+                    fig = go.Figure()
+                    
+                    # Fiyat Çizgisi (Koyu Mavi)
+                    fig.add_trace(go.Scatter(x=h_yf.index, y=cls, mode='lines', name='Kapanış (Fiyat)', line=dict(color='#1f77b4', width=2)))
+                    # MA20 (Camgöbeği / Açık Mavi)
+                    fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['MA20'], mode='lines', name='MA20', line=dict(color='#17becf', width=1.5)))
+                    # MA75 (Turuncu)
+                    fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['MA75'], mode='lines', name='MA75', line=dict(color='#ff7f0e', width=1.5)))
+                    # MA200 (Kırmızı)
+                    fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['MA200'], mode='lines', name='MA200', line=dict(color='#d62728', width=2)))
+                    
+                    # Grafik Tasarım Düzenlemeleri
+                    fig.update_layout(
+                        title=f"{secilen_hisse} - Detaylı Fiyat ve MA Karşılaştırması",
+                        xaxis_title="Tarih",
+                        yaxis_title="Fiyat (TL)",
+                        height=550,
+                        hovermode="x unified", # Fareyi gezdirdiğinizde tüm değerleri tek kutuda gösterir
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Son Değerleri Eşleştirebilmek İçin Özet Metrik Paneli
+                    son_fiyat = float(cls.iloc[-1])
+                    son_ma20 = float(h_yf['MA20'].iloc[-1]) if not pd.isna(h_yf['MA20'].iloc[-1]) else 0
+                    son_ma75 = float(h_yf['MA75'].iloc[-1]) if not pd.isna(h_yf['MA75'].iloc[-1]) else 0
+                    son_ma200 = float(h_yf['MA200'].iloc[-1]) if not pd.isna(h_yf['MA200'].iloc[-1]) else 0
+                    
+                    st.markdown("#### 📊 Güncel Değer Eşleşme Tablosu")
+                    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+                    col_m1.metric("Son Fiyat", f"{son_fiyat:.2f} TL")
+                    col_m2.metric("MA20 Değeri", f"{son_ma20:.2f} TL")
+                    col_m3.metric("MA75 Değeri", f"{son_ma75:.2f} TL")
+                    col_m4.metric("MA200 Değeri", f"{son_ma200:.2f} TL")
+                    
+                else:
+                    st.warning("Yahoo Finance üzerinden bu hisse için veri bulunamadı.")
+            except Exception as e:
+                st.error(f"Grafik yüklenirken bir hata oluştu: {e}")
+                st.info("İpucu: Plotly kütüphanesinin aktif olduğundan emin olun.")
