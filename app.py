@@ -425,7 +425,24 @@ else:
         if st.session_state.df_merged is not None:
             hisse_havuzu = sorted(st.session_state.df_merged["Kod"].dropna().astype(str).str.upper().unique().tolist())
         else:
-            hisse_havuzu = ["THYAO", "GARAN", "EREGL", "AKBNK", "KCHOL", "SISE", "BIMAS", "ASELS", "TUPRS", "PETKM"]
+            # --- HAFİZADA VERİ VARSA ÇALIŞACAK BLOK ---
+if st.session_state.df_merged is not None:
+    df = st.session_state.df_merged
+
+    # --- TEMEL KRİTERLER (FİLTRELEME) ---
+    # (Buradaki df_temel ve diğer hesaplamalar aynı kalıyor)
+    df["pdddLimit"] = np.where(df["ROE_0"] > 90, 8 + (df["ROE_0"] - 90) * 0.07, 8)
+    # ... (Radar ve Teşhis kodların burada) ...
+
+# --- HAREKETLİ ORTALAMA İNCELEME (DİKKAT: EN DIŞ HİZADA, BAĞIMSIZ) ---
+elif menu_secim == "📈 Hareketli Ortalama İnceleme":
+    st.markdown("### 📈 Hareketli Ortalama ve Trend İnceleme Paneli")
+    # ... (Grafik kodların burada) ...
+    # (Bu blok if/else'in dışında olduğu için her zaman çalışır)
+
+# --- DOSYA YÜKLENMEDİYSE UYARI ---
+elif menu_secim != "📁 Veri Yönetimi (Excel Yükle)" and st.session_state.df_merged is None:
+    st.warning("👈 Lütfen sol menüden **'📁 Veri Yönetimi (Excel Yükle)'** seçeneğine tıklayarak dosyalarınızı yükleyin.")
 
         hisse_listesi = [""] + hisse_havuzu
         secilen_hisse = st.selectbox("İncelenecek Hisseyi Seçin veya Kod Yazın:", options=hisse_listesi, key="ma_inceleme_select")
