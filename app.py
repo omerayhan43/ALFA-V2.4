@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import datetime
 import yfinance as yf
+import altair as alt
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="ALFA V2.4 Borsa Algoritma Modeli", layout="wide")
@@ -187,56 +188,76 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 h_yf['MA75'] = cls.rolling(75).mean()
                 h_yf['MA200'] = cls.rolling(200).mean()
                 
-                # Streamlit Yerleşik Grafik Çizimi Veri Seti
-                df_chart = pd.DataFrame({
-                    'Kapanış (Fiyat)': cls,
-                    'MA20': h_yf['MA20'],
-                    'MA75': h_yf['MA75'],
-                    'MA200': h_yf['MA200']
-                })
-                
-                # Son Değerler
+                # Güncel Son Değerler
                 son_fiyat = float(cls.iloc[-1])
                 son_ma20 = float(h_yf['MA20'].iloc[-1]) if not pd.isna(h_yf['MA20'].iloc[-1]) else 0
                 son_ma75 = float(h_yf['MA75'].iloc[-1]) if not pd.isna(h_yf['MA75'].iloc[-1]) else 0
                 son_ma200 = float(h_yf['MA200'].iloc[-1]) if not pd.isna(h_yf['MA200'].iloc[-1]) else 0
                 
-                # YAN YANA DÜZEN (Grafik Solda, Değer Kartları Sağda)
-                col_chart, col_metrics = st.columns([3.5, 1])
+                # 1. DEĞER KARTLARI (GRAFİĞİN TAM ÜSTÜNDE YAN YANA 4 SÜTUN)
+                st.markdown("#### 📊 Güncel Fiyat & MA Eşleşme Değerleri")
+                c_fiy, c_ma20, c_ma75, c_ma200 = st.columns(4)
                 
-                with col_chart:
-                    st.line_chart(df_chart, height=420)
-                    
-                with col_metrics:
-                    st.markdown("##### 📊 Güncel Değerler")
-                    
-                    st.markdown(f"""
-                    <div style="background-color: #e8f4f8; border-left: 5px solid #1f77b4; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                        <span style="font-size: 12px; color: #1f77b4; font-weight: bold;">Kapanış Fiyatı</span><br>
-                        <span style="font-size: 18px; font-weight: bold;">{son_fiyat:.2f} TL</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    st.markdown(f"""
-                    <div style="background-color: #e0f7fa; border-left: 5px solid #17becf; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                        <span style="font-size: 12px; color: #00838f; font-weight: bold;">MA20 Değeri</span><br>
-                        <span style="font-size: 18px; font-weight: bold;">{son_ma20:.2f} TL</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    st.markdown(f"""
-                    <div style="background-color: #fff3e0; border-left: 5px solid #ff7f0e; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                        <span style="font-size: 12px; color: #e65100; font-weight: bold;">MA75 Değeri</span><br>
-                        <span style="font-size: 18px; font-weight: bold;">{son_ma75:.2f} TL</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    st.markdown(f"""
-                    <div style="background-color: #ffebee; border-left: 5px solid #d62728; padding: 10px; border-radius: 5px;">
-                        <span style="font-size: 12px; color: #c62828; font-weight: bold;">MA200 Değeri</span><br>
-                        <span style="font-size: 18px; font-weight: bold;">{son_ma200:.2f} TL</span>
-                    </div>
-                    """, unsafe_allow_html=True)
+                c_fiy.markdown(f"""
+                <div style="background-color: #e8f4f8; border-left: 5px solid #1f77b4; padding: 10px; border-radius: 5px;">
+                    <span style="font-size: 13px; color: #1f77b4; font-weight: bold;">Kapanış Fiyatı</span><br>
+                    <span style="font-size: 20px; font-weight: bold;">{son_fiyat:.2f} TL</span>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                c_ma20.markdown(f"""
+                <div style="background-color: #e0f7fa; border-left: 5px solid #17becf; padding: 10px; border-radius: 5px;">
+                    <span style="font-size: 13px; color: #00838f; font-weight: bold;">MA20 Değeri</span><br>
+                    <span style="font-size: 20px; font-weight: bold;">{son_ma20:.2f} TL</span>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                c_ma75.markdown(f"""
+                <div style="background-color: #fff3e0; border-left: 5px solid #ff7f0e; padding: 10px; border-radius: 5px;">
+                    <span style="font-size: 13px; color: #e65100; font-weight: bold;">MA75 Değeri</span><br>
+                    <span style="font-size: 20px; font-weight: bold;">{son_ma75:.2f} TL</span>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                c_ma200.markdown(f"""
+                <div style="background-color: #ffebee; border-left: 5px solid #d62728; padding: 10px; border-radius: 5px;">
+                    <span style="font-size: 13px; color: #c62828; font-weight: bold;">MA200 Değeri</span><br>
+                    <span style="font-size: 20px; font-weight: bold;">{son_ma200:.2f} TL</span>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # 2. GRAFİK VERİ SETİ (Dinamik Y Ekseni - Dip Noktadan Başlama)
+                df_chart = pd.DataFrame({
+                    'Tarih': h_yf.index,
+                    'Kapanış (Fiyat)': cls.values,
+                    'MA20': h_yf['MA20'].values,
+                    'MA75': h_yf['MA75'].values,
+                    'MA200': h_yf['MA200'].values
+                })
+                
+                df_melted = df_chart.melt('Tarih', var_name='Gösterge', value_name='Fiyat').dropna(subset=['Fiyat'])
+                
+                # Grafiğin 0'dan değil, en dip noktanın biraz altından başlamasını sağlama
+                min_val = float(df_melted['Fiyat'].min()) * 0.96
+                max_val = float(df_melted['Fiyat'].max()) * 1.04
+                
+                chart = alt.Chart(df_melted).mark_line().encode(
+                    x=alt.X('Tarih:T', title='Tarih', axis=alt.Axis(format='%b %Y')),
+                    y=alt.Y('Fiyat:Q', title='Fiyat (TL)', scale=alt.Scale(domain=[min_val, max_val], zero=False)),
+                    color=alt.Color('Gösterge:N', 
+                                  scale=alt.Scale(
+                                      domain=['Kapanış (Fiyat)', 'MA20', 'MA75', 'MA200'],
+                                      range=['#1f77b4', '#17becf', '#ff7f0e', '#d62728']
+                                  ),
+                                  legend=alt.Legend(orient='bottom', title=None)),
+                    tooltip=['Tarih:T', 'Gösterge:N', alt.Tooltip('Fiyat:Q', format='.2f')]
+                ).properties(
+                    height=500
+                ).interactive()
+                
+                st.altair_chart(chart, use_container_width=True)
                 
             else:
                 st.warning("Yahoo Finance üzerinden bu hisse için fiyat verisi çekilemedi.")
