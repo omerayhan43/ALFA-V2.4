@@ -39,24 +39,22 @@ iki_hafta_once = (bugun - pd.DateOffset(weeks=2)).strftime(fmt)
 iki_ay_once = (bugun - pd.DateOffset(months=2)).strftime(fmt)
 bir_yil_once = (bugun - pd.DateOffset(years=1)).strftime(fmt)
 
-# --- 2. YAN MENÜ: MAKRO GİRDİLERİ & TEŞHİS ---
+# --- 2. YAN MENÜ: MAKRO GİRDİLERİ & DETAYLI TEŞHİS PANELİ ---
 st.sidebar.header("⚙️ Makro Girdiler (Otomatik & Güncel)")
 tufe_12 = st.sidebar.number_input("TÜFE(12) Yıllık %", value=31.75, format="%.2f")
 xu100_2a = st.sidebar.number_input(f"XU100 2-Aylık Getiri % ({iki_ay_once} - {bugun_str})", value=oto_2a, format="%.2f")
 xu100_2h = st.sidebar.number_input(f"XU100 2-Haftalık Getiri % ({iki_hafta_once} - {bugun_str})", value=oto_2h, format="%.2f")
 
-# --- 3. DOSYA YÜKLEME ---
 st.sidebar.header("📁 Fintables Veri Yükleme")
 file1 = st.sidebar.file_uploader("1. Temel Analiz & Fiyat Dosyası", type=["xlsx", "xls"])
 file2 = st.sidebar.file_uploader("2. Eski Dönemler Dosyası (1)", type=["xlsx", "xls"])
 
-# --- HİSSE TEŞHİS / KONTROL PANELİ (SOL MENÜ) ---
+# --- DETAYLI HİSSE TEŞHİS PANELİ (SOL MENÜ) ---
 st.sidebar.markdown("---")
-st.sidebar.header("🔍 Hisse Teşhis Paneli")
-aranan_hisse = st.sidebar.text_input("Hisse Kodu Kontrol Et (Örn: CRDFA)", "").upper().strip()
+st.sidebar.header("🔍 Detaylı Hisse Teşhis Paneli")
+aranan_hisse = st.sidebar.text_input("Hisse Kodu Kontrol Et (Örn: EGEGY)", "").upper().strip()
 
 if file1 and file2:
-    # Veri Omurgası & Birleştirme
     df1 = pd.read_excel(file1).iloc[:, :23]
     df1.columns = [
         "Kod", "ROE_0", "ROE_1", "ROE_4", "BrutEFK_0", "BrutEFK_1", 
@@ -71,7 +69,6 @@ if file1 and file2:
 
     df = pd.merge(df1, df2, on="Kod", how="left").fillna(0)
 
-    # Bilanço Geldi mi? Kontrolü & Kaydırma Mantığı
     bilanco_gelmedi = (
         (df["BrutEFK_0"] == df["BrutEFK_1"]) & 
         (df["EFK_0"] == df["EFK_1"]) & 
@@ -88,7 +85,7 @@ if file1 and file2:
     df["ef_ROE_1"] = np.where(bilanco_gelmedi, np.where(df["ROE_2"] != 0, df["ROE_2"], df["ROE_1"]), df["ROE_1"])
     df["ef_ROE_4"] = np.where(bilanco_gelmedi, np.where(df["ROE_5"] != 0, df["ROE_5"], df["ROE_4"]), df["ROE_4"])
 
-    # --- 4. TEMEL KRİTERLER (FİLTRELEME) ---
+    # Temel Kriter Mantıkları
     df["pdddLimit"] = np.where(df["ROE_0"] > 90, 8 + (df["ROE_0"] - 90) * 0.07, 8)
     
     a = df["Getiri_2a"] > xu100_2a
@@ -109,29 +106,50 @@ if file1 and file2:
     temel_filtreliler = a & b & c & d & ee & f & ((h | g) | (hx | gx) | efkTeyit) & j & roeTeyit & k
     df_temel = df[temel_filtreliler].copy()
 
-    # Eğer kullanıcı sol menüden özel bir hisse sorguladıysa
+    # Kullanıcı bir hisse aradıysa detaylı teşhis dökümü yap
     if aranan_hisse:
         tek_hisse_df = df[df["Kod"].str.upper() == aranan_hisse]
         if not tek_hisse_df.empty:
             th = tek_hisse_df.iloc[0]
-            st.sidebar.markdown(f"### 🔎 **{aranan_hisse} Analiz Sonucu**")
-            st.sidebar.write(f"- **ROE_0:** {th['ROE_0']} (TÜFE: {tufe_12} -> {'✅' if th['ROE_0'] > tufe_12 else '❌'})")
-            st.sidebar.write(f"- **2A Getiri:** {th['Getiri_2a']} (XU100 2A: {xu100_2a:.2f} -> {'✅' if th['Getiri_2a'] > xu100_2a else '❌'})")
-            st.sidebar.write(f"- **PD/DD:** {th['PDDD']} (Limit: {th['pdddLimit']:.2f} -> {'✅' if th['PDDD'] < th['pdddLimit'] else '❌'})")
-            st.sidebar.write(f"- **Net Borç/FAVÖK:** {th['NetBorc_FAVOK']} -> {'✅' if th['NetBorc_FAVOK'] < 4 else '❌'})")
-            st.sidebar.write(f"- **Temel Durumu:** {'Geçti 🎉' if aranan_hisse in df_temel['Kod'].values else 'Takıldı ❌'}")
-        else:
-            st.sidebar.warning(aranan_hisse + " kodlu hisse dosyada bulunamadı.")
+            p_lim = 8 + (th['ROE_0'] - 90) * 0.07 if th['ROE_0'] > 90 else 8
+            
+            c_a = th['Getiri_2a'] > xu100_2a
+            c_b = th['ROE_0'] > tufe_12
+            c_c = th['NetBorc_FAVOK'] < 4
+            c_d = th['PDDD'] < p_lim
+            c_ee = th['Getiri_2h'] > (xu100_2h - 10)
+            c_f = th['NetSatisBuyume'] > 0
+            c_g = th['FAVOKBuyume'] > tufe_12
+            c_h = (th['BrutEFKBuyume'] > tufe_12) and (th['EFKBuyume'] > tufe_12)
+            c_j = th['Getiri_1a'] > -15
+            c_k = th['HAOran'] < 60
+            c_teyit = (th['EFK_0'] >= th['ef_EFK_1']) or (th['EFK_0'] >= th['ef_EFK_4'])
+            c_roe_t = (th['ROE_0'] >= th['ef_ROE_1']) or (th['ROE_0'] >= th['ef_ROE_4'])
+            
+            gecti_ mi = aranan_hisse in df_temel['Kod'].values
 
-    st.success(f"Toplam {len(df)} hisse içerisinden Temel Kriterleri geçen toplam hisse sayısı: **{len(df_temel)}**")
+            st.sidebar.markdown(f"### 🔎 **{aranan_hisse} Teşhis Sonucu**")
+            st.sidebar.write(f"- ROE > TÜFE ({th['ROE_0']:.1f} > {tufe_12}): {'✅' if c_b else '❌'}")
+            st.sidebar.write(f"- 2A Getiri > XU100 ({th['Getiri_2a']:.1f} > {xu100_2a:.1f}): {'✅' if c_a else '❌'}")
+            st.sidebar.write(f"- 2H Getiri Şartı: {'✅' if c_ee else '❌'}")
+            st.sidebar.write(f"- PD/DD < Limit ({th['PDDD']:.1f} < {p_lim:.1f}): {'✅' if c_d else '❌'}")
+            st.sidebar.write(f"- Net Borç/FAVÖK < 4 ({th['NetBorc_FAVOK']:.1f}): {'✅' if c_c else '❌'}")
+            st.sidebar.write(f"- Net Satış Büyümesi > 0 ({th['NetSatisBuyume']:.1f}): {'✅' if c_f else '❌'}")
+            st.sidebar.write(f"- FAVÖK / EFK Büyüme veya Teyit: {'✅' if (c_g or c_h or c_teyit) else '❌'}")
+            st.sidebar.write(f"- ROE Teyit Şartı: {'✅' if c_roe_t else '❌'}")
+            st.sidebar.write(f"- 1A Getiri > -15 ({th['Getiri_1a']:.1f}): {'✅' if c_j else '❌'}")
+            st.sidebar.write(f"- Halka Açıklık < 60 ({th['HAOran']:.1f}): {'✅' if c_k else '❌'}")
+            st.sidebar.markdown(f"**Nihai Temel:** {'GEÇTİ 🎉' if gecti_mi else 'TAKILDI ❌'}")
+        else:
+            st.sidebar.warning(aranan_hisse + " dosyada bulunamadı.")
+
+    st.success(f"Temel Kriterleri Geçen Toplam Hisse: **{len(df_temel)}**")
 
     if len(df_temel) > 0:
-        st.markdown("### 📋 Temel Kriterleri Geçen Tüm Hisseler (Bilanço Durumları)")
+        st.markdown("### 📋 Temel Kriterleri Geçen Tüm Hisseler")
         st.dataframe(df_temel[["Kod", "Bilanco_Durum", "ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"]])
 
-        # --- 5. TEKNİK KRİTERLER VE MA HESAPLAMA ---
-        st.info("🔄 Temelden geçen tüm hisselerin hareketli ortalamaları (MA20, MA75, MA200) anlık çekiliyor...")
-        
+        st.info("🔄 Hareketli ortalamalar çekiliyor...")
         teknik_asanadan_gecenler = []
         for idx, row in df_temel.iterrows():
             kod = str(row["Kod"]).strip() + ".IS"
@@ -139,28 +157,23 @@ if file1 and file2:
                 hist = yf.download(kod, period="1y", progress=False)
                 if not hist.empty:
                     close = hist['Close']
-                    if isinstance(close, pd.DataFrame):
-                        close = close.iloc[:, 0]
+                    if isinstance(close, pd.DataFrame): close = close.iloc[:, 0]
                     if len(close) >= 200:
                         ma20 = float(close.rolling(20).mean().iloc[-1])
                         ma75 = float(close.rolling(75).mean().iloc[-1])
                         ma200 = float(close.rolling(200).mean().iloc[-1])
-
                         df_temel.loc[idx, 'MA20'] = round(ma20, 2)
                         df_temel.loc[idx, 'MA75'] = round(ma75, 2)
                         df_temel.loc[idx, 'MA200'] = round(ma200, 2)
-
                         if ma75 > ma200 and ma20 > ma75:
                             teknik_asanadan_gecenler.append(idx)
-            except Exception as e:
+            except:
                 continue
 
         df_teknik = df_temel.loc[teknik_asanadan_gecenler].copy()
         
-        st.markdown("### 🔍 Hareketli Ortalama (MA) Karşılaştırma Tablosu")
+        st.markdown("### 🔍 MA Karşılaştırma Tablosu")
         st.dataframe(df_temel[["Kod", "Kapanis", "MA20", "MA75", "MA200", "Bilanco_Durum"]])
-
-        st.success(f"Teknik kriterleri sağlayan hisse sayısı: **{len(df_teknik)}**")
 
         if len(df_teknik) > 0:
             roe = df_teknik["ROE_0"]
@@ -176,43 +189,29 @@ if file1 and file2:
             roeSkor = np.where(roe > 50, 100, roe * 2)
             momentumSkor = np.where(m6 > 100, 100, m6)
             m2Skor = np.where(m2 > 50, 100, m2 * 2)
-            
             trendYuzdesi = ((c_fiyat - ma75_val) / ma75_val) * 100
             trendSkor = np.where(trendYuzdesi > 30, 30, np.where(trendYuzdesi < 0, 0, trendYuzdesi))
-            
             pddd = df_teknik["PDDD"]
             pdddSkor = np.where(pddd < 1.5, 25, np.where(pddd < 3, 15, np.where(pddd < 5, 5, np.where(pddd > 6, -10, 0))))
-
             ebSkor = np.where(eb > 50, 100, np.where(eb > 0, eb * 2, 0))
             fbSkor = np.where(fb > 50, 100, np.where(fb > 0, fb * 2, 0))
             sbSkor = np.where(sb > 50, 100, np.where(sb > 0, sb * 2, 0))
             buySkor = (ebSkor + fbSkor + sbSkor) / 3
-
             negCeza = np.where(m1 < -10, -15, np.where(m1 < -5, -8, 0))
             ardisikCeza = np.where((m1 < 0) & (m2 < 0), -10, 0)
 
             df_teknik["SKOR"] = (
-                (roeSkor * 0.30) + 
-                (buySkor * 0.20) + 
-                (momentumSkor * 0.15) + 
-                (m2Skor * 0.05) + 
-                (trendSkor * 0.18) + 
-                (pdddSkor * 0.12) + 
-                negCeza + 
-                ardisikCeza
+                (roeSkor * 0.30) + (buySkor * 0.20) + (momentumSkor * 0.15) + 
+                (m2Skor * 0.05) + (trendSkor * 0.18) + (pdddSkor * 0.12) + negCeza + ardisikCeza
             )
 
             df_sonuc = df_teknik.sort_values(by="SKOR", ascending=False).reset_index(drop=True)
             df_sonuc.index += 1
 
             st.markdown("### 🏆 Nihai Portföy Adayları (İlk 5 Hisse)")
-            
             def highlight_top5(s):
                 return ['background-color: #d4edda; font-weight: bold;' if s.name <= 5 else '' for _ in s]
-
-            gosterge_tablosu = df_sonuc[["Kod", "SKOR", "Bilanco_Durum", "ROE_0", "PDDD", "Getiri_1a", "Getiri_6a"]].head(15)
-            st.dataframe(gosterge_tablosu.style.apply(highlight_top5, axis=1))
-
+            st.dataframe(df_sonuc[["Kod", "SKOR", "Bilanco_Durum", "ROE_0", "PDDD", "Getiri_1a", "Getiri_6a"]].head(15).style.apply(highlight_top5, axis=1))
         else:
             st.warning("Teknik kriterleri sağlayan hisse bulunamadı.")
     else:
