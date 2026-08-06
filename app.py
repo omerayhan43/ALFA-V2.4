@@ -73,7 +73,7 @@ if file1 and file2:
     f = df["NetSatisBuyume"] > 0
     g = df["FAVOKBuyume"] > tufe_12
     h = (df["BrutEFKBuyume"] > tufe_12) & (df["EFKBuyume"] > tufe_12)
-    gx = (df["FAVOK_0"] > df["FAVOK_1"]) & (df["FAVOK_0"] > df["FAVOK_4"])
+    gx = (df["FAVOK_0"] > df["FAVOK_1"]) & (df["FAVOK_0"] > df["FAVOK_4"]) if "FAVOK_4" in df.columns else (df["FAVOK_0"] > df["FAVOK_1"])
     hx = (df["BrutEFK_0"] > df["BrutEFK_1"]) & (df["EFK_0"] > df["EFK_1"])
     j = df["Getiri_1a"] > -15
     efkTeyit = (df["EFK_0"] >= df["ef_EFK_1"]) | (df["EFK_0"] >= df["ef_EFK_4"])
@@ -89,7 +89,7 @@ if file1 and file2:
         # --- 5. TEKNİK KRİTERLER (MA KONTROLÜ - Otomatik yfinance ile) ---
         st.info("🔄 Temelden geçen hisselerin hareketli ortalamaları (MA20, MA75, MA200) Yahoo Finance üzerinden hesaplanıyor...")
         
-         teknik_asanadan_gecenler = []
+        teknik_asanadan_gecenler = []
         for idx, row in df_temel.iterrows():
             kod = str(row["Kod"]).strip() + ".IS"
             try:
