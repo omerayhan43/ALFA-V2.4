@@ -54,10 +54,54 @@ with header_col2:
 
 st.markdown("---")
 
-# --- 2. YAN MENÜ: SADECE FİNTABLES DOSYA YÜKLEME ---
-st.sidebar.header("📁 Fintables Veri Yükleme")
-file1 = st.sidebar.file_uploader("1. Temel Analiz & Fiyat Dosyası", type=["xlsx", "xls"])
-file2 = st.sidebar.file_uploader("2. Eski Dönemler Dosyası (1)", type=["xlsx", "xls"])
+# --- 2. SOL MENÜ (FİNTABLES TARZI PROFESYONEL NAVİGASYON) ---
+st.sidebar.markdown("### 🔴 Fintables")
+st.sidebar.markdown("---")
+
+menu_secim = st.sidebar.radio(
+    "Navigasyon",
+    ["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli", "📁 Fintables Veri Yükleme"],
+    label_visibility="collapsed"
+)
+
+st.sidebar.markdown("---")
+st.sidebar.markdown(
+    """
+    <div style="font-size: 12px; color: #6c757d;">
+        <b>Hızlı Menü</b><br>
+        • Hissecim Modülü<br>
+        • VİOP / Kripto (Yakında)<br>
+        • Sektörler & Analizler
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# Dosya yüklemelerini oturumda saklamak için session_state kullanımı
+if "file1" not in st.session_state:
+    st.session_state.file1 = None
+if "file2" not in st.session_state:
+    st.session_state.file2 = None
+
+# --- 3. VERİ YÜKLEME EKRANI (KATEGORİ SEÇİLDİĞİNDE AÇILIR) ---
+if menu_secim == "📁 Fintables Veri Yükleme":
+    st.subheader("📁 Fintables Veri Yönetimi ve Excel Yükleme")
+    st.markdown("Modelin tarama yapabilmesi için güncel Fintables Excel dosyalarınızı aşağıya yükleyin.")
+    
+    col_up1, col_up2 = st.columns(2)
+    with col_up1:
+        st.session_state.file1 = st.file_uploader("1. Temel Analiz & Fiyat Dosyası", type=["xlsx", "xls"], key="f1")
+    with col_up2:
+        st.session_state.file2 = st.file_uploader("2. Eski Dönemler Dosyası (1)", type=["xlsx", "xls"], key="f2")
+
+    if st.session_state.file1 and st.session_state.file2:
+        st.success("✅ Excel dosyaları başarıyla yüklendi! Sol menüden **'📊 Radar & Taramalar'** sekmesine geçerek tarama sonuçlarını inceleyebilirsiniz.")
+    else:
+        st.info("👈 Lütfen her iki dosyayı da yükleyin.")
+
+# Dosyalar hafızadaysa işlemleri devam ettir
+file1 = st.session_state.file1
+file2 = st.session_state.file2
 
 if file1 and file2:
     df1 = pd.read_excel(file1).iloc[:, :23]
@@ -90,7 +134,7 @@ if file1 and file2:
     df["ef_ROE_1"] = np.where(bilanco_gelmedi, np.where(df["ROE_2"] != 0, df["ROE_2"], df["ROE_1"]), df["ROE_1"])
     df["ef_ROE_4"] = np.where(bilanco_gelmedi, np.where(df["ROE_5"] != 0, df["ROE_5"], df["ROE_4"]), df["ROE_4"])
 
-    # --- 3. TEMEL KRİTERLER (FİLTRELEME) ---
+    # --- TEMEL KRİTERLER (FİLTRELEME) ---
     df["pdddLimit"] = np.where(df["ROE_0"] > 90, 8 + (df["ROE_0"] - 90) * 0.07, 8)
     
     a = df["Getiri_2a"] > oto_2a
@@ -111,10 +155,8 @@ if file1 and file2:
     temel_filtreliler = a & b & c & d & ee & f & ((h | g) | (hx | gx) | efkTeyit) & j & roeTeyit & k
     df_temel = df[temel_filtreliler].copy()
 
-    # --- ANA SEKME YAPISI (TABS) ---
-    tab1, tab2 = st.tabs(["📊 Portföy ve Tarama Sonuçları", "🔍 Detaylı Hisse Teşhis Paneli"])
-
-    with tab1:
+    # --- 4. RADAR & TARAMALAR EKRANI ---
+    if menu_secim == "📊 Radar & Taramalar":
         # ARKA PLAN TEKNİK VERİLERİNİ ÇEKME
         teknik_asanadan_gecenler = []
         if len(df_temel) > 0:
@@ -183,7 +225,7 @@ if file1 and file2:
                 df_sonuc = df_teknik.sort_values(by="SKOR", ascending=False).reset_index(drop=True)
                 df_sonuc.index += 1
 
-                # --- 1. ANA ÇIKTI: NİHAİ PORTFÖY ADAYLARI ---
+                # --- NİHAİ PORTFÖY ADAYLARI ---
                 st.markdown("### 🏆 Nihai Portföy Adayları (En İyi Skorlar)")
                 def highlight_top5(s):
                     return ['background-color: #d4edda; font-weight: bold;' if s.name <= 5 else '' for _ in s]
@@ -200,7 +242,7 @@ if file1 and file2:
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # --- 2. DETAY TABLOLARI (AKORDEON İÇİNDE) ---
+            # --- ARKA PLAN DETAY TABLOLARI (AKORDEON) ---
             with st.expander("📋 Arka Plan Verileri: Temel Kriterleri Geçen Tüm Hisseler"):
                 st.dataframe(
                     df_temel[["Kod", "Bilanco_Durum", "ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"]]
@@ -218,7 +260,8 @@ if file1 and file2:
         else:
             st.warning("Temel kriterleri sağlayan hisse bulunamadı.")
 
-    with tab2:
+    # --- 5. HİSSE TEŞHİS PANELİ ---
+    elif menu_secim == "🔍 Hisse Teşhis Paneli":
         st.markdown("### 🔍 Hisseler İçin Derinlemesine Teşhis ve Puanlama Paneli")
         st.markdown("İstediğiniz hisse kodunu yazarak temel filtrelerden geçip geçmediğini, takıldığı kriterleri, teknik MA durumunu ve modelden aldığı skor detaylarını inceleyebilirsiniz.")
         
@@ -246,7 +289,6 @@ if file1 and file2:
                 
                 temel_gecti = secilen_hisse in df_temel['Kod'].values
 
-                # Takıldığı kriterleri topla
                 takilan_kriterler = []
                 if not c_b: takilan_kriterler.append("ROE > TÜFE")
                 if not c_a: takilan_kriterler.append("2A Getiri > XU100")
@@ -297,7 +339,6 @@ if file1 and file2:
                                 st.write(f"- **MA200:** {m200:.2f}")
                                 st.write(f"- **Teknik Kural (MA20 > MA75 > MA200):** {'✅ Sağlıyor' if teknik_gecti else '❌ Sağlamıyor'}")
                                 
-                                # Uyarı Mesajı Gösterimi
                                 if takilan_kriterler:
                                     uyari_mesaji = "Hisse aşağıdaki kriterleri sağlamadığı için filtrelerden geçemedi;\n"
                                     for kriter in takilan_kriterler:
@@ -306,7 +347,6 @@ if file1 and file2:
                                 else:
                                     st.success('🎉 Tebrikler! Hisse tüm temel ve teknik filtrelerden başarıyla geçti.')
 
-                                # Skor Hesaplama Detayı
                                 roe_val = float(th['ROE_0'])
                                 m6_val = float(th['Getiri_6a'])
                                 m2_val = float(th['Getiri_2a'])
@@ -362,4 +402,5 @@ if file1 and file2:
             else:
                 st.warning(f"'{secilen_hisse}' kodlu hisse Fintables dosyalarında bulunamadı.")
 else:
-    st.info("👈 Lütfen sol menüden Fintables Excel dosyalarını yükleyin.")
+    if menu_secim != "📁 Fintables Veri Yükleme":
+        st.info("👈 Lütfen sol menüden **'📁 Fintables Veri Yükleme'** seçeneğine tıklayarak Excel dosyalarınızı yükleyin.")
