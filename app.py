@@ -39,7 +39,7 @@ iki_hafta_once = (bugun - pd.DateOffset(weeks=2)).strftime(fmt)
 iki_ay_once = (bugun - pd.DateOffset(months=2)).strftime(fmt)
 bir_yil_once = (bugun - pd.DateOffset(years=1)).strftime(fmt)
 
-# --- 2. YAN MENÜ: MAKRO GİRDİLERİ ---
+# --- 2. YAN MENÜ: MAKRO GİRDİLERİ & TEŞHİS ---
 st.sidebar.header("⚙️ Makro Girdiler (Otomatik & Güncel)")
 tufe_12 = st.sidebar.number_input(f"TÜFE(12) Yıllık %", value=31.75, format="%.2f")
 xu100_2a = st.sidebar.number_input(f"XU100 2-Aylık Getiri % ({iki_ay_once} - {bugun_str})", value=oto_2a, format="%.2f")
@@ -49,6 +49,11 @@ xu100_2h = st.sidebar.number_input(f"XU100 2-Haftalık Getiri % ({iki_hafta_once
 st.sidebar.header("📁 Fintables Veri Yükleme")
 file1 = st.sidebar.file_uploader("1. Temel Analiz & Fiyat Dosyası", type=["xlsx", "xls"])
 file2 = st.sidebar.file_uploader("2. Eski Dönemler Dosyası (1)", type=["xlsx", "xls"])
+
+# --- HİSSE TEŞHİS / KONTROL PANELİ (SOL MENÜ) ---
+st.sidebar.markdown("---")
+st.sidebar.header("🔍 Hisse Teşhis Paneli")
+aranan_hisse = st.sidebar.text_input("Hisse Kodu Kontrol Et (Örn: CRDFA)", "").upper().strip()
 
 if file1 and file2:
     # Veri Omurgası & Birleştirme
@@ -104,14 +109,27 @@ if file1 and file2:
     temel_filtreliler = a & b & c & d & ee & f & ((h | g) | (hx | gx) | efkTeyit) & j & roeTeyit & k
     df_temel = df[temel_filtreliler].copy()
 
+    # Eğer kullanıcı sol menüden özel bir hisse sorguladıysa
+    if aranan_hisse:
+        tek_hisse_df = df[df["Kod"].str.upper() == aranan_hisse]
+        if not tek_hisse_df.empty:
+            th = tek_hisse_df.iloc[0]
+            st.sidebar.markdown(f"### 🔎 **{aranan_hisse} Analiz Sonucu**")
+            st.sidebar.write(f"- **ROE_0:** {th['ROE_0']} (TÜFE: {tufe_12} -> {'✅' if th['ROE_0'] > tufe_12 else '❌'})")
+            st.sidebar.write(f"- **2A Getiri:** {th['Getiri_2a']} (XU100 2A: {xu100_2a:.2f} -> {'✅' if th['Getiri_2a'] > xu100_2a else '❌'})")
+            st.sidebar.write(f"- **PD/DD:** {th['PDDD']} (Limit: {th['pdddLimit']:.2f} -> {'✅' if th['PDDD'] < th['pdddLimit'] else '❌'})")
+            st.sidebar.write(f"- **Net Borç/FAVÖK:** {th['NetBorc_FAVOK']} -> {'✅' if th['NetBorc_FAVOK'] < 4 else '❌'})")
+            st.sidebar.write(f"- **Temel Durumu:** {'Geçti 🎉' if aranan_hisse in df_temel['Kod'].values else 'Takıldı ❌'}")
+        else:
+            st.sidebar.warning(f"'{aranan_hisse' kodlu hisse dosyada bulunamadı.")
+
     st.success(f"Toplam {len(df)} hisse içerisinden Temel Kriterleri geçen toplam hisse sayısı: **{len(df_temel)}**")
 
     if len(df_temel) > 0:
-        # Temelden geçen tüm hisseleri bilanço durumuyla göster
         st.markdown("### 📋 Temel Kriterleri Geçen Tüm Hisseler (Bilanço Durumları)")
         st.dataframe(df_temel[["Kod", "Bilanco_Durum", "ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"]])
 
-        # --- 5. TEKNİK KRİTERLER VE MA HESAPLAMA (Yahoo Finance üzerinden anlık) ---
+        # --- 5. TEKNİK KRİTERLER VE MA HESAPLAMA ---
         st.info("🔄 Temelden geçen tüm hisselerin hareketli ortalamaları (MA20, MA75, MA200) anlık çekiliyor...")
         
         teknik_asanadan_gecenler = []
@@ -132,7 +150,6 @@ if file1 and file2:
                         df_temel.loc[idx, 'MA75'] = round(ma75, 2)
                         df_temel.loc[idx, 'MA200'] = round(ma200, 2)
 
-                        # Teknik Kriter: MA75 > MA200 ve MA20 > MA75
                         if ma75 > ma200 and ma20 > ma75:
                             teknik_asanadan_gecenler.append(idx)
             except Exception as e:
@@ -140,14 +157,12 @@ if file1 and file2:
 
         df_teknik = df_temel.loc[teknik_asanadan_gecenler].copy()
         
-        # Manuel kontrol için MA Karşılaştırma Tablosu
-        st.markdown("### 🔍 Hareketli Ortalama (MA) Karşılaştırma Tablosu (Manuel Kontrol İçin)")
+        st.markdown("### 🔍 Hareketli Ortalama (MA) Karşılaştırma Tablosu")
         st.dataframe(df_temel[["Kod", "Kapanis", "MA20", "MA75", "MA200", "Bilanco_Durum"]])
 
         st.success(f"Teknik kriterleri sağlayan hisse sayısı: **{len(df_teknik)}**")
 
         if len(df_teknik) > 0:
-            # --- 6. SKORLAMA VE CEZA HESAPLAMA ---
             roe = df_teknik["ROE_0"]
             m6 = df_teknik["Getiri_6a"]
             m2 = df_teknik["Getiri_2a"]
