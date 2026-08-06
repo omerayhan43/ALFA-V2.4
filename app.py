@@ -41,7 +41,7 @@ bir_yil_once = (bugun - pd.DateOffset(years=1)).strftime(fmt)
 
 # --- 2. YAN MENÜ: MAKRO GİRDİLERİ & TEŞHİS ---
 st.sidebar.header("⚙️ Makro Girdiler (Otomatik & Güncel)")
-tufe_12 = st.sidebar.number_input(f"TÜFE(12) Yıllık %", value=31.75, format="%.2f")
+tufe_12 = st.sidebar.number_input("TÜFE(12) Yıllık %", value=31.75, format="%.2f")
 xu100_2a = st.sidebar.number_input(f"XU100 2-Aylık Getiri % ({iki_ay_once} - {bugun_str})", value=oto_2a, format="%.2f")
 xu100_2h = st.sidebar.number_input(f"XU100 2-Haftalık Getiri % ({iki_hafta_once} - {bugun_str})", value=oto_2h, format="%.2f")
 
@@ -121,7 +121,7 @@ if file1 and file2:
             st.sidebar.write(f"- **Net Borç/FAVÖK:** {th['NetBorc_FAVOK']} -> {'✅' if th['NetBorc_FAVOK'] < 4 else '❌'})")
             st.sidebar.write(f"- **Temel Durumu:** {'Geçti 🎉' if aranan_hisse in df_temel['Kod'].values else 'Takıldı ❌'}")
         else:
-            st.sidebar.warning(f"'{aranan_hisse' kodlu hisse dosyada bulunamadı.")
+            st.sidebar.warning(aranan_hisse + " kodlu hisse dosyada bulunamadı.")
 
     st.success(f"Toplam {len(df)} hisse içerisinden Temel Kriterleri geçen toplam hisse sayısı: **{len(df_temel)}**")
 
