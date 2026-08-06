@@ -70,13 +70,13 @@ def on_sonuclar_change():
     val = st.session_state.get("radio_sonuclar")
     if val:
         st.session_state.nav_page = val
-        st.session_state.radio_veri = None  # Veri yönetimi seçimini temizle
+        st.session_state.radio_veri = None
 
 def on_veri_change():
     val = st.session_state.get("radio_veri")
     if val:
         st.session_state.nav_page = val
-        st.session_state.radio_sonuclar = None  # Sonuçlar seçimini temizle
+        st.session_state.radio_sonuclar = None
 
 # --- ÜST BAŞLIK & SAĞ ÜSTTE OTOMATİK MAKRO GÖSTERGESİ ---
 header_col1, header_col2 = st.columns([3, 2])
@@ -202,7 +202,7 @@ if menu_secim == "📁 Veri Yönetimi (Excel Yükle)":
     else:
         st.info("👈 Lütfen her iki Excel dosyasını da yükleyin.")
 
-# --- 4. HAREKETLİ ORTALAMA İNCELEME PANELİ ---
+# --- 4. HAREKETLİ ORTALAMA İNCELEME PANELİ (TAM EKRAN UYUMLU HACİMSİZ GRAFİK) ---
 elif menu_secim == "📈 Hareketli Ortalama İnceleme":
     st.markdown("### 📈 Hareketli Ortalama ve Trend İnceleme Paneli")
     
@@ -212,7 +212,7 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
         hisse_havuzu = ["A1CAP", "AKBNK", "ARCLK", "ASELS", "ATATP", "BIMAS", "CRDFA", "EGEGY", "EREGL", "FORTE", "GARAN", "KCHOL", "PETKM", "SAHOL", "SISE", "THYAO", "TUPRS"]
 
     hisse_listesi = [""] + hisse_havuzu
-    secilen_hisse = st.selectbox("Hisse Seçin / Arayın (Örn: ATATP, A1CAP, THYAO):", options=hisse_listesi, key="ma_inceleme_select")
+    secilen_hisse = st.selectbox("Hisse Seçin / Arayın (Örn: CRDFA, ATATP, THYAO):", options=hisse_listesi, key="ma_inceleme_select")
 
     if secilen_hisse:
         try:
@@ -224,30 +224,7 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     h_yf.columns = h_yf.columns.get_level_values(0)
                 h_yf = h_yf.sort_index().dropna()
                 
-                # Periyot Butonları
-                zaman_araligi = st.radio(
-                    "Periyot Seçimi",
-                    options=["1A", "3A", "6A", "1Y", "3Y", "Tümü"],
-                    index=3, # Varsayılan: 1Y
-                    horizontal=True,
-                    label_visibility="collapsed",
-                    key="time_frame_radio"
-                )
-
-                bugun_dt = h_yf.index[-1]
-                if zaman_araligi == "1A":
-                    baslangic_dt = bugun_dt - pd.Timedelta(days=30)
-                elif zaman_araligi == "3A":
-                    baslangic_dt = bugun_dt - pd.Timedelta(days=90)
-                elif zaman_araligi == "6A":
-                    baslangic_dt = bugun_dt - pd.Timedelta(days=180)
-                elif zaman_araligi == "1Y":
-                    baslangic_dt = bugun_dt - pd.Timedelta(days=365)
-                elif zaman_araligi == "3Y":
-                    baslangic_dt = bugun_dt - pd.Timedelta(days=1095)
-                else:
-                    baslangic_dt = h_yf.index[0]
-
+                # Tüm Seri Üzerinde MA ve HHV Hesabı
                 h_yf['MA20'] = h_yf['Close'].rolling(20).mean()
                 h_yf['MA75'] = h_yf['Close'].rolling(75).mean()
                 h_yf['MA200'] = h_yf['Close'].rolling(200).mean()
@@ -256,14 +233,10 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 hhv252 = float(hi_252.max())
                 hhv_limit = hhv252 * 0.77
 
-                h_view = h_yf.loc[h_yf.index >= baslangic_dt].copy()
-                if h_view.empty:
-                    h_view = h_yf.copy()
-
-                op = h_view['Open']
-                hi = h_view['High']
-                lo = h_view['Low']
-                cls = h_view['Close']
+                op = h_yf['Open']
+                hi = h_yf['High']
+                lo = h_yf['Low']
+                cls = h_yf['Close']
 
                 if isinstance(op, pd.DataFrame): op = op.iloc[:, 0]
                 if isinstance(hi, pd.DataFrame): hi = hi.iloc[:, 0]
@@ -274,15 +247,16 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 donem_en_dusuk = float(lo.min())
 
                 son_fiyat = float(cls.iloc[-1])
-                son_ma20 = float(h_view['MA20'].iloc[-1]) if not pd.isna(h_view['MA20'].iloc[-1]) else 0
-                son_ma75 = float(h_view['MA75'].iloc[-1]) if not pd.isna(h_view['MA75'].iloc[-1]) else 0
-                son_ma200 = float(h_view['MA200'].iloc[-1]) if not pd.isna(h_view['MA200'].iloc[-1]) else 0
+                son_ma20 = float(h_yf['MA20'].iloc[-1]) if not pd.isna(h_yf['MA20'].iloc[-1]) else 0
+                son_ma75 = float(h_yf['MA75'].iloc[-1]) if not pd.isna(h_yf['MA75'].iloc[-1]) else 0
+                son_ma200 = float(h_yf['MA200'].iloc[-1]) if not pd.isna(h_yf['MA200'].iloc[-1]) else 0
 
                 fig = go.Figure()
                 
+                # Mum Grafiği
                 fig.add_trace(
                     go.Candlestick(
-                        x=h_view.index,
+                        x=h_yf.index,
                         open=op, high=hi, low=lo, close=cls,
                         name='Fiyat',
                         increasing_line_color='#089981', decreasing_line_color='#F23645',
@@ -290,14 +264,16 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     )
                 )
                 
-                fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA20'], mode='lines', name='MA 20', line=dict(color='#2962FF', width=2)))
-                fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA75'], mode='lines', name='MA 75', line=dict(color='#089981', width=2)))
-                fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA200'], mode='lines', name='MA 200', line=dict(color='#2A2E39', width=2)))
+                # Hareketli Ortalamalar
+                fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['MA20'], mode='lines', name='MA 20', line=dict(color='#2962FF', width=2)))
+                fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['MA75'], mode='lines', name='MA 75', line=dict(color='#089981', width=2)))
+                fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['MA200'], mode='lines', name='MA 200', line=dict(color='#2A2E39', width=2)))
                 
+                # En Yüksek / En Düşük Kesikli Çizgileri
                 fig.add_hline(y=donem_en_yuksek, line_dash="dot", line_color="#787B86", line_width=1.2)
                 fig.add_hline(y=donem_en_dusuk, line_dash="dot", line_color="#787B86", line_width=1.2)
 
-                last_date = h_view.index[-1]
+                last_date = h_yf.index[-1]
                 
                 def add_right_badge(fig_obj, y_val, text, bg_color, text_color="white"):
                     fig_obj.add_annotation(
@@ -320,6 +296,7 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 add_right_badge(fig, donem_en_yuksek, f"{donem_en_yuksek:.2f}", "#434651")
                 add_right_badge(fig, donem_en_dusuk, f"{donem_en_dusuk:.2f}", "#434651")
 
+                # SOL ÜST GÖSTERGE LEJANDI
                 info_html = (
                     f"<b>{secilen_hisse} · 1G</b><br>"
                     f"<span style='color:#2962FF;'>MA 20 close 0: <b>{son_ma20:.2f}</b></span><br>"
@@ -340,11 +317,13 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     font=dict(size=12, family="Arial")
                 )
                 
-                y_padding = (donem_en_yuksek - donem_en_dusuk) * 0.04
+                bugun_dt = h_yf.index[-1]
+                varsayilan_baslangic = bugun_dt - pd.Timedelta(days=365)
+
                 fig.update_layout(
                     template="plotly_white",
-                    height=600,
-                    margin=dict(l=10, r=85, t=10, b=10),
+                    height=650,
+                    margin=dict(l=10, r=85, t=55, b=10),
                     xaxis_rangeslider_visible=False,
                     showlegend=False,
                     hovermode="x unified",
@@ -352,13 +331,38 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     paper_bgcolor="#FFFFFF"
                 )
                 
+                # GRAFİĞİN KENDİ İÇİNE PERİYOT SEÇİMİ (TAM EKRANDA DA GÖRÜNÜR)
+                fig.update_xaxes(
+                    gridcolor="#F0F0F0",
+                    range=[varsayilan_baslangic, bugun_dt],
+                    rangeselector=dict(
+                        buttons=list([
+                            dict(count=1, label="1A", step="month", stepmode="backward"),
+                            dict(count=3, label="3A", step="month", stepmode="backward"),
+                            dict(count=6, label="6A", step="month", stepmode="backward"),
+                            dict(count=1, label="1Y", step="year", stepmode="backward"),
+                            dict(count=3, label="3Y", step="year", stepmode="backward"),
+                            dict(step="all", label="Tümü")
+                        ]),
+                        bgcolor="#F8FAFC",
+                        activecolor="#2962FF",
+                        font=dict(color="#1E293B", size=12, family="Arial"),
+                        bordercolor="#CBD5E1",
+                        borderwidth=1,
+                        x=0.01,
+                        y=1.02,
+                        xanchor="left",
+                        yanchor="bottom"
+                    )
+                )
+                
                 fig.update_yaxes(
                     side="right", 
                     tickformat=".2f", 
-                    gridcolor="#F0F0F0", 
-                    range=[donem_en_dusuk - y_padding, donem_en_yuksek + y_padding]
+                    gridcolor="#F0F0F0",
+                    autorange=True,
+                    fixedrange=False
                 )
-                fig.update_xaxes(gridcolor="#F0F0F0")
                 
                 st.plotly_chart(fig, use_container_width=True)
                 
