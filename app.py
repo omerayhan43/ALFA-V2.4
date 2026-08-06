@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import datetime
 import yfinance as yf
-from io import BytesIO
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="ALFA V2.4 Borsa Algoritma Modeli", layout="wide")
@@ -24,13 +23,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
-# --- EXCEL DÖNÜŞTÜRME FONKSİYONU (Hata Düzeltildi) ---
-def to_excel(df):
-    output = BytesIO()
-    with pd.ExcelWriter(output) as writer:
-        df.to_excel(writer, index=False, sheet_name='PortfoyAdaylari')
-    return output.getvalue()
 
 # --- 1. OTOMATİK XU100 ENDEKS & MAKRO GİRDİLERİ (ARKA PLAN) ---
 @st.cache_data(ttl=3600)
@@ -255,15 +247,6 @@ if st.session_state.df_merged is not None:
 
                 st.markdown("### 🏆 Nihai Portföy Adayları (En İyi Skorlar)")
                 
-                # Excel İndir Butonu
-                excel_data = to_excel(df_sonuc)
-                st.download_button(
-                    label="📥 Raporu Excel Olarak İndir",
-                    data=excel_data,
-                    file_name=f'ALFA_Portfoy_Adaylari_{datetime.datetime.now().strftime("%Y%m%d_%H%M")}.xlsx',
-                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                )
-
                 def highlight_top5(s):
                     return ['background-color: #d4edda; font-weight: bold;' if s.name <= 5 else '' for _ in s]
                 
@@ -301,7 +284,7 @@ if st.session_state.df_merged is not None:
         st.markdown("### 🔍 Hisseler İçin Derinlemesine Teşhis ve Puanlama Paneli")
         st.markdown("İstediğiniz hisse kodunu seçerek temel filtrelerden geçip geçmediğini, takıldığı kriterleri, teknik MA durumunu ve modelden aldığı skor detaylarını inceleyebilirsiniz.")
         
-        # Anlık arama özellikli selectbox (Enter gerektirmez)
+        # Anlık arama özellikli selectbox
         hisse_listesi = [""] + sorted(df["Kod"].dropna().astype(str).str.upper().unique().tolist())
         secilen_hisse = st.selectbox("Hisse Seçin / Arayın (Örn: CRDFA, EGEGY, FORTE)", options=hisse_listesi)
 
