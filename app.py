@@ -2,11 +2,15 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import datetime
+from zoneinfo import ZoneInfo  # İstanbul saat dilimi için
 import yfinance as yf
 import plotly.graph_objects as go
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="ALFA V2.4 Borsa Algoritma Modeli", layout="wide")
+
+# İSTANBUL SAAT DİLİMİ (UTC+3)
+TURKEY_TZ = ZoneInfo("Europe/Istanbul")
 
 # --- ÖZGÜN CSS (Pointer İşareti ve Menü Tasarımı) ---
 st.markdown(
@@ -47,7 +51,7 @@ def otomatik_makro_veriler():
         if df.empty: return 31.75, -1.98, 0.76 
         
         df.index = pd.to_datetime(df.index)
-        bugun = pd.Timestamp.today()
+        bugun = pd.Timestamp.now(tz=TURKEY_TZ).tz_localize(None)
         day_t = df.index.asof(bugun)
         day_t2w = df.index.asof(bugun - pd.Timedelta(days=14))
         day_t2m = df.index.asof(bugun - pd.Timedelta(days=60))
@@ -205,7 +209,9 @@ if menu_secim == "📁 Veri Yönetimi (Excel Yükle)":
             df["ef_ROE_4"] = np.where(bilanco_gelmedi, np.where(df["ROE_5"] != 0, df["ROE_5"], df["ROE_4"]), df["ROE_4"])
 
             st.session_state.df_merged = df
-            st.session_state.upload_time = datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+            # İSTANBUL SAATİNE GÖRE YÜKLEME ZAMANI KAYDI
+            now_tr = datetime.datetime.now(TURKEY_TZ)
+            st.session_state.upload_time = now_tr.strftime("%d.%m.%Y %H:%M:%S")
             st.success(f"✅ Excel dosyaları başarıyla işlendi ve hafızaya kaydedildi! (Yükleme Zamanı: {st.session_state.upload_time}) Sol menüden **'📊 Radar & Taramalar'** sekmesine geçebilirsiniz.")
         except Exception as e:
             st.error(f"Dosyalar işlenirken hata oluştu: {e}")
@@ -228,7 +234,6 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
     
     with col_sel2:
         if secilen_hisse:
-            # DİNAMİK Y-EKSERİ RE-SCALE SAĞLAYAN PERİYOT SEÇİCİ
             periyot = st.radio(
                 "Zaman Aralığı",
                 options=["1A", "3A", "6A", "1Y", "3Y", "Tümü"],
@@ -247,7 +252,7 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     h_yf.columns = h_yf.columns.get_level_values(0)
                 h_yf = h_yf.sort_index().dropna()
                 
-                # Arka planda 200 günlük MA'lar 3 yıllık geçmişle tam hesaplanır
+                # Arka planda MA ve HHV hesapları
                 h_yf['MA20'] = h_yf['Close'].rolling(20).mean()
                 h_yf['MA75'] = h_yf['Close'].rolling(75).mean()
                 h_yf['MA200'] = h_yf['Close'].rolling(200).mean()
@@ -256,7 +261,7 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 hhv252 = float(hi_252.max())
                 hhv_limit = hhv252 * 0.77
 
-                # SEÇİLEN PERİYODA GÖRE VERİ KÜMESİNİ SÜZME (Y-EKSENİNİ TAM DOLDURUR)
+                # Python Tarafında Süzme (Tam Ekranda veya Normal Görünümde Kusursuz Ölçek)
                 bugun_dt = h_yf.index[-1]
                 if periyot == "1A":
                     baslangic_dt = bugun_dt - pd.Timedelta(days=30)
@@ -271,7 +276,6 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 else:
                     baslangic_dt = h_yf.index[0]
 
-                # Seçilen Döneme Özel Süzülmüş Veri Seti
                 h_view = h_yf.loc[h_yf.index >= baslangic_dt].copy()
                 if h_view.empty:
                     h_view = h_yf.copy()
@@ -286,7 +290,6 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 if isinstance(lo, pd.DataFrame): lo = lo.iloc[:, 0]
                 if isinstance(cls, pd.DataFrame): cls = cls.iloc[:, 0]
 
-                # SEÇİLİ DÖNEMİN EN YÜKSEK VE EN DÜŞÜK SEVİYELERİ
                 donem_en_yuksek = float(hi.max())
                 donem_en_dusuk = float(lo.min())
 
@@ -313,7 +316,7 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA75'], mode='lines', name='MA 75', line=dict(color='#089981', width=2)))
                 fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA200'], mode='lines', name='MA 200', line=dict(color='#2A2E39', width=2)))
                 
-                # Sadece Seçili Döneme Özel En Yüksek / En Düşük Kesikli Çizgileri
+                # En Yüksek / En Düşük Çizgileri
                 fig.add_hline(y=donem_en_yuksek, line_dash="dot", line_color="#787B86", line_width=1.2)
                 fig.add_hline(y=donem_en_dusuk, line_dash="dot", line_color="#787B86", line_width=1.2)
 
@@ -337,7 +340,6 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 if son_ma75: add_right_badge(fig, son_ma75, f"{son_ma75:.2f}", "#089981")
                 if son_ma200: add_right_badge(fig, son_ma200, f"{son_ma200:.2f}", "#2A2E39")
                 
-                # Dönem En Yüksek / En Düşük Sağ Eksen Rozeti
                 add_right_badge(fig, donem_en_yuksek, f"{donem_en_yuksek:.2f}", "#434651")
                 add_right_badge(fig, donem_en_dusuk, f"{donem_en_dusuk:.2f}", "#434651")
 
@@ -362,7 +364,6 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     font=dict(size=12, family="Arial")
                 )
 
-                # Y EKSENİ İÇİN TAM DÖNEMSEL SIĞDIRMA MARJI (%3 Marj)
                 y_pad = (donem_en_yuksek - donem_en_dusuk) * 0.03 if donem_en_yuksek != donem_en_dusuk else 1.0
 
                 fig.update_layout(
