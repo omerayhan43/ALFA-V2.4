@@ -173,7 +173,8 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
     if secilen_hisse:
         try:
             with st.spinner(f"🔄 '{secilen_hisse}' TradingView grafik verileri hazırlanıyor..."):
-                h_yf = yf.download(secilen_hisse + ".IS", period="1y", progress=False)
+                # 3Y Veri çekilerek 252 günlük HHV ve MA200 verileri garantiye alınır
+                h_yf = yf.download(secilen_hisse + ".IS", period="3y", progress=False)
                 
             if not h_yf.empty:
                 if isinstance(h_yf.columns, pd.MultiIndex):
@@ -197,6 +198,11 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 ma75 = cls.rolling(75).mean()
                 ma200 = cls.rolling(200).mean()
                 
+                # HHV252 (Son 252 İşlem Gününün En Yükseği) ve %23 Düzeltme Sınırı (* 0.77)
+                hi_252 = hi.tail(252) if len(hi) >= 252 else hi
+                hhv252 = float(hi_252.max())
+                hhv_limit = hhv252 * 0.77
+                
                 son_fiyat = float(cls.iloc[-1])
                 son_ma20 = float(ma20.iloc[-1]) if not pd.isna(ma20.iloc[-1]) else 0
                 son_ma75 = float(ma75.iloc[-1]) if not pd.isna(ma75.iloc[-1]) else 0
@@ -207,7 +213,7 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 fig = make_subplots(
                     rows=2, cols=1, 
                     shared_xaxes=True, 
-                    vertical_spacing=0.02, 
+                    vertical_spacing=0.03, 
                     row_heights=[0.80, 0.20]
                 )
                 
@@ -223,19 +229,19 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     row=1, col=1
                 )
                 
-                # 2. Hareketli Ortalamalar (Görseldekine Birebir Uygun Renkler)
+                # 2. Hareketli Ortalamalar
                 fig.add_trace(go.Scatter(x=h_yf.index, y=ma20, mode='lines', name='MA 20', line=dict(color='#2962FF', width=2)), row=1, col=1)
                 fig.add_trace(go.Scatter(x=h_yf.index, y=ma75, mode='lines', name='MA 75', line=dict(color='#089981', width=2)), row=1, col=1)
                 fig.add_trace(go.Scatter(x=h_yf.index, y=ma200, mode='lines', name='MA 200', line=dict(color='#2A2E39', width=2)), row=1, col=1)
                 
-                # 3. Hacim Barları (Yeşil / Kırmızı)
+                # 3. Hacim Barları
                 colors = ['#089981' if c >= o else '#F23645' for c, o in zip(cls, op)]
                 fig.add_trace(
                     go.Bar(x=h_yf.index, y=vol, name='Hacim', marker_color=colors, opacity=0.6),
                     row=2, col=1
                 )
                 
-                # SAĞ Y-EKSENİ FİYAT ROZETLERİ (Çizgilerin hizasındaki renkli etiketler)
+                # SAĞ Y-EKSENİ FİYAT ROZETLERİ
                 last_date = h_yf.index[-1]
                 
                 def add_right_badge(fig_obj, y_val, text, bg_color):
@@ -250,20 +256,24 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                         borderpad=3
                     )
 
-                # Sağ Eksen Etiketleri Ekleme
                 price_color = "#089981" if cls.iloc[-1] >= op.iloc[-1] else "#F23645"
                 add_right_badge(fig, son_fiyat, f"{son_fiyat:.2f}", price_color)
                 if son_ma20: add_right_badge(fig, son_ma20, f"{son_ma20:.2f}", "#2962FF")
                 if son_ma75: add_right_badge(fig, son_ma75, f"{son_ma75:.2f}", "#089981")
                 if son_ma200: add_right_badge(fig, son_ma200, f"{son_ma200:.2f}", "#2A2E39")
                 
-                # SOL ÜST GÖSTERGE LEJANDI (TradingView Formatı)
+                # SOL ÜST GÖSTERGE LEJANDI (Görseldeki Kutuya HHV252*0.77 Eklendi)
                 vol_str = f"{son_vol/1e6:.2f}M" if son_vol >= 1e6 else f"{son_vol/1e3:.2f}K"
+                
+                # Fiyat HHV252*0.77 Sınırının Üstünde/Altında Durumuna Göre Renk Ayarı
+                limit_status_color = "#D97706"  # Kehribar Turuncusu
+                
                 info_html = (
                     f"<b>{secilen_hisse} · 1G</b> &nbsp; <span style='color:gray;'>Hacim: {vol_str}</span><br>"
                     f"<span style='color:#2962FF;'>MA 20 close 0: <b>{son_ma20:.2f}</b></span><br>"
                     f"<span style='color:#089981;'>MA 75 close 0: <b>{son_ma75:.2f}</b></span><br>"
-                    f"<span style='color:#2A2E39;'>MA 200 close 0: <b>{son_ma200:.2f}</b></span>"
+                    f"<span style='color:#2A2E39;'>MA 200 close 0: <b>{son_ma200:.2f}</b></span><br>"
+                    f"<span style='color:{limit_status_color};'>HHV252 * 0.77: <b>{hhv_limit:.2f}</b></span>"
                 )
                 
                 fig.add_annotation(
@@ -272,17 +282,37 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     text=info_html,
                     showarrow=False,
                     align="left",
-                    bgcolor="rgba(255, 255, 255, 0.9)",
+                    bgcolor="rgba(255, 255, 255, 0.92)",
                     bordercolor="#E0E0E0",
                     borderwidth=1,
                     font=dict(size=12, family="Arial")
                 )
                 
-                # TRADINGVIEW BEYAZ TEMA & EKSEN DÜZENLEMELERİ
+                # DİNAMİK ZAMAN ARALIĞI BUTONLARI (1A, 3A, 6A, 1Y, 3Y)
+                fig.update_xaxes(
+                    gridcolor="#F0F0F0",
+                    rangeselector=dict(
+                        buttons=list([
+                            dict(count=1, label="1A", step="month", stepmode="backward"),
+                            dict(count=3, label="3A", step="month", stepmode="backward"),
+                            dict(count=6, label="6A", step="month", stepmode="backward"),
+                            dict(count=1, label="1Y", step="year", stepmode="backward"),
+                            dict(count=3, label="3Y", step="year", stepmode="backward"),
+                            dict(step="all", label="Tümü")
+                        ]),
+                        bgcolor="#F8F9FA",
+                        activecolor="#E0F2FE",
+                        font=dict(size=11, color="#1E293B", family="Arial"),
+                        x=0.01,
+                        y=1.12
+                    )
+                )
+
+                # TRADINGVIEW TEMA DÜZENLEMELERİ
                 fig.update_layout(
                     template="plotly_white",
-                    height=650,
-                    margin=dict(l=10, r=80, t=10, b=10),
+                    height=680,
+                    margin=dict(l=10, r=80, t=40, b=10),
                     xaxis_rangeslider_visible=False,
                     showlegend=False,
                     hovermode="x unified",
@@ -290,10 +320,13 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     paper_bgcolor="#FFFFFF"
                 )
                 
-                # Sağ eksen yapılandırması
+                # Varsayılan Görünümü 1 Yıl Olarak Ayarla
+                bir_yil_once = (datetime.datetime.now() - datetime.timedelta(days=365)).strftime("%Y-%m-%d")
+                bugun_str = datetime.datetime.now().strftime("%Y-%m-%d")
+                fig.update_xaxes(range=[bir_yil_once, bugun_str])
+                
                 fig.update_yaxes(side="right", tickformat=".2f", gridcolor="#F0F0F0", row=1, col=1, autorange=True)
                 fig.update_yaxes(side="right", gridcolor="#F0F0F0", row=2, col=1)
-                fig.update_xaxes(gridcolor="#F0F0F0")
                 
                 st.plotly_chart(fig, use_container_width=True)
                 
