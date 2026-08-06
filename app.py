@@ -114,7 +114,10 @@ if file1 and file2:
 
         if len(df_temel) > 0:
             st.markdown("### 📋 Temel Kriterleri Geçen Tüm Hisseler")
-            st.dataframe(df_temel[["Kod", "Bilanco_Durum", "ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"]].round(2))
+            st.dataframe(
+                df_temel[["Kod", "Bilanco_Durum", "ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"]]
+                .style.format(precision=2, subset=["ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"])
+            )
 
             st.info("🔄 Temelden geçen tüm hisselerin hareketli ortalamaları (MA20, MA75, MA200) anlık çekiliyor...")
             
@@ -142,7 +145,10 @@ if file1 and file2:
             df_teknik = df_temel.loc[teknik_asanadan_gecenler].copy()
             
             st.markdown("### 🔍 MA Karşılaştırma Tablosu")
-            st.dataframe(df_temel[["Kod", "Kapanis", "MA20", "MA75", "MA200", "Bilanco_Durum"]].round(2))
+            st.dataframe(
+                df_temel[["Kod", "Kapanis", "MA20", "MA75", "MA200", "Bilanco_Durum"]]
+                .style.format(precision=2, subset=["Kapanis", "MA20", "MA75", "MA200"])
+            )
 
             if len(df_teknik) > 0:
                 roe = df_teknik["ROE_0"]
@@ -180,7 +186,13 @@ if file1 and file2:
                 st.markdown("### 🏆 Nihai Portföy Adayları (İlk 5 Hisse)")
                 def highlight_top5(s):
                     return ['background-color: #d4edda; font-weight: bold;' if s.name <= 5 else '' for _ in s]
-                st.dataframe(df_sonuc[["Kod", "SKOR", "Bilanco_Durum", "ROE_0", "PDDD", "Getiri_1a", "Getiri_6a"]].head(15).round(2).style.apply(highlight_top5, axis=1))
+                
+                st.dataframe(
+                    df_sonuc[["Kod", "SKOR", "Bilanco_Durum", "ROE_0", "PDDD", "Getiri_1a", "Getiri_6a"]]
+                    .head(15)
+                    .style.format(precision=2, subset=["SKOR", "ROE_0", "PDDD", "Getiri_1a", "Getiri_6a"])
+                    .apply(highlight_top5, axis=1)
+                )
             else:
                 st.warning("Teknik kriterleri sağlayan hisse bulunamadı.")
         else:
