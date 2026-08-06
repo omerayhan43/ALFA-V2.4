@@ -8,16 +8,10 @@ import plotly.graph_objects as go
 # Sayfa Yapılandırması
 st.set_page_config(page_title="ALFA V2.4 Borsa Algoritma Modeli", layout="wide")
 
-# --- ÖZGÜN CSS (Fintables Tarzı Alt Kademe Menü Tasarımı) ---
+# --- ÖZGÜN CSS (Pointer İşareti ve Menü Tasarımı) ---
 st.markdown(
     """
     <style>
-    /* Fintables Alt Menü Dikey Çizgisi ve Girintileme */
-    div[data-testid="stSidebar"] div[role="radiogroup"] {
-        border-left: 2px solid #cbd5e1 !important;
-        margin-left: 12px !important;
-        padding-left: 8px !important;
-    }
     div[data-testid="stSidebar"] div[role="radiogroup"] > label {
         cursor: pointer !important;
         padding: 5px 10px !important;
@@ -66,7 +60,7 @@ tufe_12, oto_2h, oto_2a = otomatik_makro_veriler()
 # --- SESSION STATE (Veri ve Zaman Kalıcılığı) ---
 if "df_merged" not in st.session_state: st.session_state.df_merged = None
 if "upload_time" not in st.session_state: st.session_state.upload_time = None
-if "menu_secim" not in st.session_state: st.session_state.menu_secim = "📊 Radar & Taramalar"
+if "active_secim" not in st.session_state: st.session_state.active_secim = "📊 Radar & Taramalar"
 
 # --- ÜST BAŞLIK & SAĞ ÜSTTE OTOMATİK MAKRO GÖSTERGESİ ---
 header_col1, header_col2 = st.columns([3, 2])
@@ -89,71 +83,43 @@ with header_col2:
 
 st.markdown("---")
 
-# --- 2. SOL MENÜ (FİNTABLES TARZI HİYERARŞİK NAVİGASYON) ---
+# --- 2. SOL MENÜ (AÇILIR / KAPANIR AKORDEON NAVİGASYON) ---
 st.sidebar.markdown("### ⚡ ALFA Terminal")
 st.sidebar.markdown("---")
 
-# 1. ANA BAŞLIK: SONUÇLAR
-st.sidebar.markdown(
-    """
-    <div style="font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">
-        📊 Sonuçlar
-    </div>
-    """, 
-    unsafe_allow_html=True
-)
+# 1. AÇILIR KATEGORİ: SONUÇLAR
+with st.sidebar.expander("📊 Sonuçlar", expanded=True):
+    sonuclar_opts = [
+        "📊 Radar & Taramalar", 
+        "🔍 Hisse Teşhis Paneli", 
+        "📈 Hareketli Ortalama İnceleme"
+    ]
+    cur_idx = sonuclar_opts.index(st.session_state.active_secim) if st.session_state.active_secim in sonuclar_opts else 0
+    secim_sonuc = st.radio(
+        "Sonuçlar Seçimi",
+        options=sonuclar_opts,
+        index=cur_idx,
+        key="radio_sonuclar",
+        label_visibility="collapsed"
+    )
+    if secim_sonuc != st.session_state.active_secim and secim_sonuc in sonuclar_opts:
+        st.session_state.active_secim = secim_sonuc
 
-sonuclar_options = [
-    "📊 Radar & Taramalar", 
-    "🔍 Hisse Teşhis Paneli", 
-    "📈 Hareketli Ortalama İnceleme"
-]
+# 2. AÇILIR KATEGORİ: VERİ YÖNETİMİ
+with st.sidebar.expander("📁 Veri Yönetimi", expanded=False):
+    veri_opts = ["📁 Veri Yönetimi (Excel Yükle)"]
+    cur_v_idx = veri_opts.index(st.session_state.active_secim) if st.session_state.active_secim in veri_opts else 0
+    secim_veri = st.radio(
+        "Veri Yönetimi Seçimi",
+        options=veri_opts,
+        index=cur_v_idx,
+        key="radio_veri",
+        label_visibility="collapsed"
+    )
+    if secim_veri != st.session_state.active_secim and secim_veri in veri_opts:
+        st.session_state.active_secim = secim_veri
 
-idx_sonuclar = sonuclar_options.index(st.session_state.menu_secim) if st.session_state.menu_secim in sonuclar_options else 0
-
-def update_sonuclar():
-    st.session_state.menu_secim = st.session_state.key_sonuclar
-
-st.sidebar.radio(
-    "Sonuçlar Alt Menü",
-    options=sonuclar_options,
-    index=idx_sonuclar,
-    key="key_sonuclar",
-    on_change=update_sonuclar,
-    label_visibility="collapsed"
-)
-
-st.sidebar.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
-
-# 2. ANA BAŞLIK: VERİ YÖNETİMİ
-st.sidebar.markdown(
-    """
-    <div style="font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">
-        📁 Veri Yönetimi
-    </div>
-    """, 
-    unsafe_allow_html=True
-)
-
-veri_options = [
-    "📁 Veri Yönetimi (Excel Yükle)"
-]
-
-idx_veri = veri_options.index(st.session_state.menu_secim) if st.session_state.menu_secim in veri_options else 0
-
-def update_veri():
-    st.session_state.menu_secim = st.session_state.key_veri
-
-st.sidebar.radio(
-    "Veri Yönetimi Alt Menü",
-    options=veri_options,
-    index=idx_veri,
-    key="key_veri",
-    on_change=update_veri,
-    label_visibility="collapsed"
-)
-
-menu_secim = st.session_state.menu_secim
+menu_secim = st.session_state.active_secim
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(
