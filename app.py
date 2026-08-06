@@ -8,22 +8,27 @@ import plotly.graph_objects as go
 # Sayfa Yapılandırması
 st.set_page_config(page_title="ALFA V2.4 Borsa Algoritma Modeli", layout="wide")
 
-# --- ÖZGÜN CSS (Pointer İşareti, Modern Navigasyon ve Buton Tasarımı) ---
+# --- ÖZGÜN CSS (Fintables Tarzı Alt Kademe Menü Tasarımı) ---
 st.markdown(
     """
     <style>
-    div[role="radiogroup"] > label {
-        cursor: pointer !important;
-        padding: 6px 14px !important;
-        border-radius: 6px !important;
-        background-color: #f8f9fa;
-        border: 1px solid #e9ecef;
-        margin-right: 4px;
-        font-weight: 500;
-        font-size: 13px;
+    /* Fintables Alt Menü Dikey Çizgisi ve Girintileme */
+    div[data-testid="stSidebar"] div[role="radiogroup"] {
+        border-left: 2px solid #cbd5e1 !important;
+        margin-left: 12px !important;
+        padding-left: 8px !important;
     }
-    div[role="radiogroup"] > label:hover {
-        background-color: #e2e8f0;
+    div[data-testid="stSidebar"] div[role="radiogroup"] > label {
+        cursor: pointer !important;
+        padding: 5px 10px !important;
+        border-radius: 6px !important;
+        font-size: 13px !important;
+        color: #334155 !important;
+        transition: all 0.2s ease;
+    }
+    div[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
+        background-color: #f1f5f9 !important;
+        color: #0f172a !important;
     }
     </style>
     """,
@@ -61,6 +66,7 @@ tufe_12, oto_2h, oto_2a = otomatik_makro_veriler()
 # --- SESSION STATE (Veri ve Zaman Kalıcılığı) ---
 if "df_merged" not in st.session_state: st.session_state.df_merged = None
 if "upload_time" not in st.session_state: st.session_state.upload_time = None
+if "menu_secim" not in st.session_state: st.session_state.menu_secim = "📊 Radar & Taramalar"
 
 # --- ÜST BAŞLIK & SAĞ ÜSTTE OTOMATİK MAKRO GÖSTERGESİ ---
 header_col1, header_col2 = st.columns([3, 2])
@@ -83,20 +89,71 @@ with header_col2:
 
 st.markdown("---")
 
-# --- 2. SOL MENÜ (NAVİGASYON) ---
+# --- 2. SOL MENÜ (FİNTABLES TARZI HİYERARŞİK NAVİGASYON) ---
 st.sidebar.markdown("### ⚡ ALFA Terminal")
 st.sidebar.markdown("---")
 
-menu_secim = st.sidebar.radio(
-    "Navigasyon",
-    [
-        "📊 Radar & Taramalar", 
-        "🔍 Hisse Teşhis Paneli", 
-        "📈 Hareketli Ortalama İnceleme",
-        "📁 Veri Yönetimi (Excel Yükle)"
-    ],
+# 1. ANA BAŞLIK: SONUÇLAR
+st.sidebar.markdown(
+    """
+    <div style="font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">
+        📊 Sonuçlar
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
+
+sonuclar_options = [
+    "📊 Radar & Taramalar", 
+    "🔍 Hisse Teşhis Paneli", 
+    "📈 Hareketli Ortalama İnceleme"
+]
+
+idx_sonuclar = sonuclar_options.index(st.session_state.menu_secim) if st.session_state.menu_secim in sonuclar_options else 0
+
+def update_sonuclar():
+    st.session_state.menu_secim = st.session_state.key_sonuclar
+
+st.sidebar.radio(
+    "Sonuçlar Alt Menü",
+    options=sonuclar_options,
+    index=idx_sonuclar,
+    key="key_sonuclar",
+    on_change=update_sonuclar,
     label_visibility="collapsed"
 )
+
+st.sidebar.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
+
+# 2. ANA BAŞLIK: VERİ YÖNETİMİ
+st.sidebar.markdown(
+    """
+    <div style="font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">
+        📁 Veri Yönetimi
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
+
+veri_options = [
+    "📁 Veri Yönetimi (Excel Yükle)"
+]
+
+idx_veri = veri_options.index(st.session_state.menu_secim) if st.session_state.menu_secim in veri_options else 0
+
+def update_veri():
+    st.session_state.menu_secim = st.session_state.key_veri
+
+st.sidebar.radio(
+    "Veri Yönetimi Alt Menü",
+    options=veri_options,
+    index=idx_veri,
+    key="key_veri",
+    on_change=update_veri,
+    label_visibility="collapsed"
+)
+
+menu_secim = st.session_state.menu_secim
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(
@@ -162,7 +219,7 @@ if menu_secim == "📁 Veri Yönetimi (Excel Yükle)":
     else:
         st.info("👈 Lütfen her iki Excel dosyasını da yükleyin.")
 
-# --- 4. HAREKETLİ ORTALAMA İNCELEME PANELİ (TRADINGVIEW FORMATI - HACİMSİZ) ---
+# --- 4. HAREKETLİ ORTALAMA İNCELEME PANELİ ---
 elif menu_secim == "📈 Hareketli Ortalama İnceleme":
     st.markdown("### 📈 Hareketli Ortalama ve Trend İnceleme Paneli")
     
@@ -184,7 +241,7 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     h_yf.columns = h_yf.columns.get_level_values(0)
                 h_yf = h_yf.sort_index().dropna()
                 
-                # Nizami Yan Yana Hizalanmış Periyot Butonları
+                # Periyot Butonları
                 zaman_araligi = st.radio(
                     "Periyot Seçimi",
                     options=["1A", "3A", "6A", "1Y", "3Y", "Tümü"],
@@ -194,7 +251,6 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     key="time_frame_radio"
                 )
 
-                # Seçilen Zaman Aralığına Göre Gösterilecek Verinin Süzülmesi
                 bugun_dt = h_yf.index[-1]
                 if zaman_araligi == "1A":
                     baslangic_dt = bugun_dt - pd.Timedelta(days=30)
@@ -206,20 +262,17 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     baslangic_dt = bugun_dt - pd.Timedelta(days=365)
                 elif zaman_araligi == "3Y":
                     baslangic_dt = bugun_dt - pd.Timedelta(days=1095)
-                else: # Tümü
+                else:
                     baslangic_dt = h_yf.index[0]
 
-                # Tüm Seri Üzerinde MA ve HHV Hesabı
                 h_yf['MA20'] = h_yf['Close'].rolling(20).mean()
                 h_yf['MA75'] = h_yf['Close'].rolling(75).mean()
                 h_yf['MA200'] = h_yf['Close'].rolling(200).mean()
                 
-                # HHV252 (Son 252 İşlem Gününün En Yükseği) ve %23 Düzeltme Sınırı (* 0.77)
                 hi_252 = h_yf['High'].tail(252) if len(h_yf) >= 252 else h_yf['High']
                 hhv252 = float(hi_252.max())
                 hhv_limit = hhv252 * 0.77
 
-                # Sadece Seçili Zaman Aralığı İçin Grafiğe Çizilecek Veri Seti
                 h_view = h_yf.loc[h_yf.index >= baslangic_dt].copy()
                 if h_view.empty:
                     h_view = h_yf.copy()
@@ -234,7 +287,6 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 if isinstance(lo, pd.DataFrame): lo = lo.iloc[:, 0]
                 if isinstance(cls, pd.DataFrame): cls = cls.iloc[:, 0]
 
-                # Seçili Dönem İçin En Yüksek ve En Düşük Günlük Değerler
                 donem_en_yuksek = float(hi.max())
                 donem_en_dusuk = float(lo.min())
 
@@ -243,10 +295,8 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 son_ma75 = float(h_view['MA75'].iloc[-1]) if not pd.isna(h_view['MA75'].iloc[-1]) else 0
                 son_ma200 = float(h_view['MA200'].iloc[-1]) if not pd.isna(h_view['MA200'].iloc[-1]) else 0
 
-                # Tek Katmanlı TradingView Grafiği (Hacimsiz, Tam Ekran Odaklı)
                 fig = go.Figure()
                 
-                # 1. Mum Grafiği
                 fig.add_trace(
                     go.Candlestick(
                         x=h_view.index,
@@ -257,26 +307,13 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     )
                 )
                 
-                # 2. Hareketli Ortalamalar
                 fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA20'], mode='lines', name='MA 20', line=dict(color='#2962FF', width=2)))
                 fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA75'], mode='lines', name='MA 75', line=dict(color='#089981', width=2)))
                 fig.add_trace(go.Scatter(x=h_view.index, y=h_view['MA200'], mode='lines', name='MA 200', line=dict(color='#2A2E39', width=2)))
                 
-                # 3. DÖNEMSEL EN YÜKSEK & EN DÜŞÜK KESİKLİ YATAY ÇİZGİLERİ
-                fig.add_hline(
-                    y=donem_en_yuksek, 
-                    line_dash="dot", 
-                    line_color="#787B86", 
-                    line_width=1.2
-                )
-                fig.add_hline(
-                    y=donem_en_dusuk, 
-                    line_dash="dot", 
-                    line_color="#787B86", 
-                    line_width=1.2
-                )
+                fig.add_hline(y=donem_en_yuksek, line_dash="dot", line_color="#787B86", line_width=1.2)
+                fig.add_hline(y=donem_en_dusuk, line_dash="dot", line_color="#787B86", line_width=1.2)
 
-                # SAĞ Y-EKSENİ FİYAT ROZETLERİ
                 last_date = h_view.index[-1]
                 
                 def add_right_badge(fig_obj, y_val, text, bg_color, text_color="white"):
@@ -291,18 +328,15 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                         borderpad=3
                     )
 
-                # Sağ Eksen Etiketleri
                 price_color = "#089981" if cls.iloc[-1] >= op.iloc[-1] else "#F23645"
                 add_right_badge(fig, son_fiyat, f"{son_fiyat:.2f}", price_color)
                 if son_ma20: add_right_badge(fig, son_ma20, f"{son_ma20:.2f}", "#2962FF")
                 if son_ma75: add_right_badge(fig, son_ma75, f"{son_ma75:.2f}", "#089981")
                 if son_ma200: add_right_badge(fig, son_ma200, f"{son_ma200:.2f}", "#2A2E39")
                 
-                # Koyu Gri TradingView En Yüksek / En Düşük Rozetleri
                 add_right_badge(fig, donem_en_yuksek, f"{donem_en_yuksek:.2f}", "#434651")
                 add_right_badge(fig, donem_en_dusuk, f"{donem_en_dusuk:.2f}", "#434651")
 
-                # SOL ÜST GÖSTERGE LEJANDI (Hacim Bilgisi Çıkarıldı)
                 info_html = (
                     f"<b>{secilen_hisse} · 1G</b><br>"
                     f"<span style='color:#2962FF;'>MA 20 close 0: <b>{son_ma20:.2f}</b></span><br>"
@@ -323,7 +357,6 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     font=dict(size=12, family="Arial")
                 )
                 
-                # TRADINGVIEW TEMA DÜZENLEMELERİ & OTOMATİK DİNAMİK ÖLÇEK
                 y_padding = (donem_en_yuksek - donem_en_dusuk) * 0.04
                 fig.update_layout(
                     template="plotly_white",
@@ -404,7 +437,6 @@ else:
 
             df_teknik = df_temel.loc[teknik_asanadan_gecenler].copy()
 
-            # Modern Metrik Kartları (KPIs)
             m1, m2, m3 = st.columns(3)
             m1.metric(label="📊 Toplam İncelenen", value=f"{len(df)} Hisse")
             m2.metric(label="🏛️ Temel Filtreyi Geçen", value=f"{len(df_temel)} Hisse")
@@ -548,7 +580,6 @@ else:
                         (m2_skor * 0.05) + (tr_skor * 0.18) + (p_skor * 0.12) + n_ceza + ard_ceza
                     )
 
-                    # 3 Sütunlu Yan Yana Tasarım
                     col1, col2, col3 = st.columns(3)
 
                     with col1:
@@ -602,7 +633,6 @@ else:
                         except Exception as e:
                             st.error(f"Teknik hata: {e}")
 
-                    # En Altta Hata Listesi
                     if takilan_kriterler:
                         st.markdown("---")
                         st.warning("Hisse aşağıdaki kriterleri sağlamadığı için filtrelerden geçemedi;")
