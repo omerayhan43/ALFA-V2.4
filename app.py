@@ -14,26 +14,23 @@ st.markdown("Temel + Teknik Filtreleme -> Ağırlıklı Skorlama -> İlk 5 Hisse
 @st.cache_data(ttl=3600)
 def otomatik_xu100_getirileri():
     try:
-        # BIST 100 verilerini '1mo' veya '3mo' periyotta çekerek resmi kapanışları alıyoruz
         bist100 = yf.download("XU100.IS", period="3mo", progress=False)
         if not bist100.empty and len(bist100) >= 40:
-            fiyatlar = bist100['Close'] # Sadece kapanış fiyatları
+            fiyatlar = bist100['Close']
             if isinstance(fiyatlar, pd.DataFrame):
                 fiyatlar = fiyatlar.iloc[:, 0]
             
-            # Son 1 işlem günü (Kapanış)
-            bugun_kapanis = fiyatlar.iloc[-1]
-            # İşlem günü olarak geçmişe dönük 10 ve 40 gün (Hafta sonları hariç)
-            iki_hafta_once_kapanis = fiyatlar.iloc[-10]
-            iki_ay_once_kapanis = fiyatlar.iloc[-40]
+            bugun_kapanis = float(fiyatlar.iloc[-1])
+            iki_hafta_once_kapanis = float(fiyatlar.iloc[-10])
+            iki_ay_once_kapanis = float(fiyatlar.iloc[-40])
             
-            xu100_2h = float(((bugun_kapanis - iki_hafta_once_kapanis) / iki_hafta_once_fiyat) * 100)
+            xu100_2h = float(((bugun_kapanis - iki_hafta_once_kapanis) / iki_hafta_once_kapanis) * 100)
             xu100_2a = float(((bugun_kapanis - iki_ay_once_kapanis) / iki_ay_once_kapanis) * 100)
             
             return xu100_2h, xu100_2a
-    except:
-        pass
-    return -5.57, -1.50
+    except Exception as e:
+        print("Hata:", e)
+    return -1.04, 0.40
 
 oto_2h, oto_2a = otomatik_xu100_getirileri()
 
@@ -85,15 +82,8 @@ if file1 and file2:
             th = df[df["Kod"] == aranan_hisse].iloc[0] if aranan_hisse in df["Kod"].values else None
             if th is not None:
                 st.write(f"### {aranan_hisse} Analiz")
-                # Basit logic kontrolü
                 st.write(f"- ROE ({th['ROE_0']}) > {tufe_12}: {'✅' if th['ROE_0'] > tufe_12 else '❌'}")
                 st.write(f"- 2A Getiri ({th['Getiri_2a']}) > {xu100_2a}: {'✅' if th['Getiri_2a'] > xu100_2a else '❌'}")
-                
-                # Teknik Detay
-                h_yf = yf.download(aranan_hisse + ".IS", period="1y", progress=False)
-                if not h_yf.empty:
-                    m20 = h_yf['Close'].rolling(20).mean().iloc[-1]
-                    st.write(f"- MA20: {m20:.2f}")
             else:
                 st.warning("Hisse bulunamadı.")
 else:
