@@ -47,8 +47,8 @@ iki_ay_once = (bugun - pd.DateOffset(months=2)).strftime(fmt)
 # --- 2. YAN MENÜ: MAKRO GİRDİLERİ & DOSYA YÜKLEME ---
 st.sidebar.header("⚙️ Makro Girdiler (Otomatik & Güncel)")
 tufe_12 = st.sidebar.number_input("TÜFE(12) Yıllık %", value=31.75, format="%.2f")
-xu100_2a = st.sidebar.number_input(f"XU100 2-Aylık Getiri % ({iki_ay_once} - {bugun_str})", value=oto_2a, format="%.2f")
-xu100_2h = st.sidebar.number_input(f"XU100 2-Haftalık Getiri % ({iki_hafta_once} - {bugun_str})", value=oto_2h, format="%.2f")
+xu100_2a = st.sidebar.number_input(f"XU100 2-Aylık Getiri % ({iki_ay_once} - {bugun_str})", value=round(oto_2a, 2), format="%.2f")
+xu100_2h = st.sidebar.number_input(f"XU100 2-Haftalık Getiri % ({iki_hafta_once} - {bugun_str})", value=round(oto_2h, 2), format="%.2f")
 
 st.sidebar.header("📁 Fintables Veri Yükleme")
 file1 = st.sidebar.file_uploader("1. Temel Analiz & Fiyat Dosyası", type=["xlsx", "xls"])
@@ -114,7 +114,7 @@ if file1 and file2:
 
         if len(df_temel) > 0:
             st.markdown("### 📋 Temel Kriterleri Geçen Tüm Hisseler")
-            st.dataframe(df_temel[["Kod", "Bilanco_Durum", "ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"]])
+            st.dataframe(df_temel[["Kod", "Bilanco_Durum", "ROE_0", "PDDD", "NetBorc_FAVOK", "Getiri_2a"]].round(2))
 
             st.info("🔄 Temelden geçen tüm hisselerin hareketli ortalamaları (MA20, MA75, MA200) anlık çekiliyor...")
             
@@ -142,7 +142,7 @@ if file1 and file2:
             df_teknik = df_temel.loc[teknik_asanadan_gecenler].copy()
             
             st.markdown("### 🔍 MA Karşılaştırma Tablosu")
-            st.dataframe(df_temel[["Kod", "Kapanis", "MA20", "MA75", "MA200", "Bilanco_Durum"]])
+            st.dataframe(df_temel[["Kod", "Kapanis", "MA20", "MA75", "MA200", "Bilanco_Durum"]].round(2))
 
             if len(df_teknik) > 0:
                 roe = df_teknik["ROE_0"]
@@ -180,7 +180,7 @@ if file1 and file2:
                 st.markdown("### 🏆 Nihai Portföy Adayları (İlk 5 Hisse)")
                 def highlight_top5(s):
                     return ['background-color: #d4edda; font-weight: bold;' if s.name <= 5 else '' for _ in s]
-                st.dataframe(df_sonuc[["Kod", "SKOR", "Bilanco_Durum", "ROE_0", "PDDD", "Getiri_1a", "Getiri_6a"]].head(15).style.apply(highlight_top5, axis=1))
+                st.dataframe(df_sonuc[["Kod", "SKOR", "Bilanco_Durum", "ROE_0", "PDDD", "Getiri_1a", "Getiri_6a"]].head(15).round(2).style.apply(highlight_top5, axis=1))
             else:
                 st.warning("Teknik kriterleri sağlayan hisse bulunamadı.")
         else:
@@ -231,7 +231,7 @@ if file1 and file2:
 
                 with col1:
                     st.markdown(f"#### 🏛️ Temel Analiz Kriterleri ({secilen_hisse})")
-                    st.write(f"- **ROE > TÜFE** ({float(th['ROE_0']):.2f} > {tufe_12}): {'✅ Geçti' if c_b else '❌ Kaldı'}")
+                    st.write(f"- **ROE > TÜFE** ({float(th['ROE_0']):.2f} > {tufe_12:.2f}): {'✅ Geçti' if c_b else '❌ Kaldı'}")
                     st.write(f"- **2A Getiri > XU100** ({float(th['Getiri_2a']):.2f} > {xu100_2a:.2f}): {'✅ Geçti' if c_a else '❌ Kaldı'}")
                     st.write(f"- **2H Getiri Şartı** ({float(th['Getiri_2h']):.2f} > {xu100_2h - 10:.2f}): {'✅ Geçti' if c_ee else '❌ Kaldı'}")
                     st.write(f"- **PD/DD < Sınır** ({float(th['PDDD']):.2f} < {p_lim:.2f}): {'✅ Geçti' if c_d else '❌ Kaldı'}")
@@ -265,7 +265,7 @@ if file1 and file2:
                                 st.write(f"- **MA200:** {m200:.2f}")
                                 st.write(f"- **Teknik Kural (MA20 > MA75 > MA200):** {'✅ Sağlıyor' if teknik_gecti else '❌ Sağlamıyor'}")
                                 
-                                # Uyarı Mesajı Gösterimi (Alt alta tire ile)
+                                # Uyarı Mesajı Gösterimi
                                 if takilan_kriterler:
                                     uyari_mesaji = "Hisse aşağıdaki kriterleri sağlamadığı için filtrelerden geçemedi;\n"
                                     for kriter in takilan_kriterler:
@@ -312,10 +312,9 @@ if file1 and file2:
                                 st.write(f"- Momentum Katkısı (%15): {(m_skor * 0.15):.2f}")
                                 st.write(f"- PD/DD Katkısı (%12): {(p_skor * 0.12):.2f}")
                                 
-                                # Cezaları alt alta tire ile listeleme
                                 aktif_cezalar = []
-                                if n_ceza != 0: aktif_cezalar.append(f"Kısa Vade: {n_ceza}")
-                                if ard_ceza != 0: aktif_cezalar.append(f"Ardışık: {ard_ceza}")
+                                if n_ceza != 0: aktif_cezalar.append(f"Kısa Vade: {n_ceza:.2f}")
+                                if ard_ceza != 0: aktif_cezalar.append(f"Ardışık: {ard_ceza:.2f}")
 
                                 if aktif_cezalar:
                                     ceza_mesaji = "Uygulanan Cezalar;\n"
