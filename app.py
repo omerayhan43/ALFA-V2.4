@@ -303,6 +303,13 @@ elif current_page in ["v14_radar", "v14_diag"]:
     if st.session_state.df_merged is not None:
         df = st.session_state.df_merged.copy()
 
+        # GEÇİCİ ÇÖKME GUARD'I: Fintables merge'de olmayan -4 sütunları (FAVOK_4, BrutEFK_4)
+        # yoksa -1 değerine düşür ki V1.4 sayfası KeyError vermeden açılsın.
+        # NOT: V1.4 mantığı henüz taslak; bunu birlikte tasarlarken kaldıracağız.
+        for _eksik, _kaynak in [("FAVOK_4", "FAVOK_1"), ("BrutEFK_4", "BrutEFK_1")]:
+            if _eksik not in df.columns:
+                df[_eksik] = df[_kaynak]
+
         # V1.4 TEMEL FİLTRELERİ
         df["pdddLimit"] = np.where(df["ROE_0"] > 90, 8 + (df["ROE_0"] - 90) * 0.07, 8)
         
@@ -534,8 +541,9 @@ elif current_page in ["v24_radar", "v24_diag"]:
         f = df["NetSatisBuyume"] > 0
         g = df["FAVOKBuyume"] > tufe_12
         h = (df["BrutEFKBuyume"] > tufe_12) & (df["EFKBuyume"] > tufe_12)
-        gx = (df["FAVOK_0"] > df["FAVOK_1"]) & (df["FAVOK_0"] > df["FAVOK_4"]) if "FAVOK_4" in df.columns else (df["FAVOK_0"] > df["FAVOK_1"])
-        hx = (df["BrutEFK_0"] > df["BrutEFK_1"]) & (df["EFK_0"] > df["EFK_1"])
+        # DÜZELTME: Excel'e sadık -> efektif (bilanço-ayarlı) dönemleri kullan
+        gx = df["FAVOK_0"] > df["ef_FAVOK_1"]
+        hx = (df["BrutEFK_0"] > df["ef_BrutEFK_1"]) & (df["EFK_0"] > df["ef_EFK_1"])
         j = df["Getiri_1a"] > -15
         efkTeyit = (df["EFK_0"] >= df["ef_EFK_1"]) | (df["EFK_0"] >= df["ef_EFK_4"])
         roeTeyit = (df["ROE_0"] >= df["ef_ROE_1"]) | (df["ROE_0"] >= df["ef_ROE_4"])
@@ -583,7 +591,7 @@ elif current_page in ["v24_radar", "v24_diag"]:
                     m1 = df_teknik["Getiri_1a"]
                     c_fiyat = df_teknik["Kapanis"]
                     ma75_val = df_teknik["MA75"]
-                    eb = df_teknik["BrutEFKBuyume"]
+                    eb = df_teknik["EFKBuyume"]   # DÜZELTME: Excel ebSkor EFK büyümesini kullanır (BrutEFK değil)
                     fb = df_teknik["FAVOKBuyume"]
                     sb = df_teknik["NetSatisBuyume"]
 
