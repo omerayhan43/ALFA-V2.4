@@ -9,7 +9,7 @@ import yfinance as yf
 import plotly.graph_objects as go
 
 # Sayfa Yapılandırması
-st.set_page_config(page_title="ALFA V2.4 Borsa Algoritma Modeli", layout="wide")
+st.set_page_config(page_title="ALFA Terminal - Borsa Algoritma Modeli", layout="wide")
 
 # İSTANBUL SAAT DİLİMİ (UTC+3)
 TURKEY_TZ = ZoneInfo("Europe/Istanbul")
@@ -70,9 +70,15 @@ tufe_12, oto_2h, oto_2a = otomatik_makro_veriler()
 # --- SESSION STATE & F5 VERİ KALICILIĞI YÖNETİMİ ---
 if "df_merged" not in st.session_state: st.session_state.df_merged = None
 if "upload_time" not in st.session_state: st.session_state.upload_time = None
+
+# Varsayılan Açılış Sayfası
 if "nav_page" not in st.session_state:
-    st.session_state.nav_page = "📊 Radar & Taramalar"
-    st.session_state.radio_sonuclar = "📊 Radar & Taramalar"
+    st.session_state.nav_page = "v24_radar"
+    st.session_state.radio_v14 = None
+    st.session_state.radio_v24 = "📊 Radar & Taramalar"
+    st.session_state.radio_v34 = None
+    st.session_state.radio_v123 = None
+    st.session_state.radio_ma = None
     st.session_state.radio_veri = None
 
 # F5 Yenilemelerinde Veriyi Diskten Otomatik Yükleme
@@ -86,24 +92,31 @@ if st.session_state.df_merged is None:
         except Exception:
             pass
 
-# --- NAVİGASYON CALLBACK FONKSİYONLARI ---
-def on_sonuclar_change():
-    val = st.session_state.get("radio_sonuclar")
-    if val:
-        st.session_state.nav_page = val
-        st.session_state.radio_veri = None
+# --- NAVİGASYON CALLBACK SİSTEMİ ---
+RADIO_KEYS = ["radio_v14", "radio_v24", "radio_v34", "radio_v123", "radio_ma", "radio_veri"]
 
-def on_veri_change():
-    val = st.session_state.get("radio_veri")
-    if val:
-        st.session_state.nav_page = val
-        st.session_state.radio_sonuclar = None
+def create_nav_callback(key, mapping):
+    def callback():
+        val = st.session_state.get(key)
+        if val:
+            st.session_state.nav_page = mapping[val]
+            for rk in RADIO_KEYS:
+                if rk != key:
+                    st.session_state[rk] = None
+    return callback
+
+map_v14 = {"📊 Radar & Taramalar": "v14_radar", "🔍 Hisse Teşhis Paneli": "v14_diag"}
+map_v24 = {"📊 Radar & Taramalar": "v24_radar", "🔍 Hisse Teşhis Paneli": "v24_diag"}
+map_v34 = {"📊 Radar & Taramalar": "v34_radar", "🔍 Hisse Teşhis Paneli": "v34_diag"}
+map_v123 = {"📊 Radar & Taramalar": "v123_radar", "🔍 Hisse Teşhis Paneli": "v123_diag"}
+map_ma = {"📈 Hareketli Ortalama İnceleme": "ma_review"}
+map_veri = {"📁 Veri Yönetimi (Excel Yükle)": "data_mgmt"}
 
 # --- ÜST BAŞLIK & SAĞ ÜSTTE OTOMATİK MAKRO GÖSTERGESİ ---
 header_col1, header_col2 = st.columns([3, 2])
 with header_col1:
-    st.title("📈 BIST Algoritmik Hisse Seçim Modeli (ALFA V2.4)")
-    st.markdown("Temel + Teknik Filtreleme -> Ağırlıklı Skorlama -> İlk 5 Hisse Portföy Adayı")
+    st.title("📈 ALFA Terminal Algoritmik Hisse Seçim Modelleri")
+    st.markdown("Çoklu Algoritma Taraması -> Ağırlıklı Skorlama -> Portföy Adayları")
 
 with header_col2:
     zaman_bilgisi = f"<br><span>🕒 Yükleme: <b>{st.session_state.upload_time}</b></span>" if st.session_state.upload_time else ""
@@ -120,51 +133,68 @@ with header_col2:
 
 st.markdown("---")
 
-# --- 2. SOL MENÜ (KUSURSUZ AKORDEON NAVİGASYON) ---
+# --- 2. SOL MENÜ (KATEGORİK NAVİGASYON) ---
 st.sidebar.markdown("### ⚡ ALFA Terminal")
 st.sidebar.markdown("---")
 
-is_sonuclar_active = st.session_state.nav_page in [
-    "📊 Radar & Taramalar", 
-    "🔍 Hisse Teşhis Paneli", 
-    "📈 Hareketli Ortalama İnceleme"
-]
-is_veri_active = st.session_state.nav_page in [
-    "📁 Veri Yönetimi (Excel Yükle)"
-]
+current_page = st.session_state.nav_page
 
-# 1. AÇILIR KATEGORİ: SONUÇLAR
-with st.sidebar.expander("📊 Sonuçlar", expanded=is_sonuclar_active):
+# Kategori Aktiflik Kontrolleri
+is_v14_active = current_page in ["v14_radar", "v14_diag"]
+is_v24_active = current_page in ["v24_radar", "v24_diag"]
+is_v34_active = current_page in ["v34_radar", "v34_diag"]
+is_v123_active = current_page in ["v123_radar", "v123_diag"]
+is_ma_active = current_page == "ma_review"
+is_veri_active = current_page == "data_mgmt"
+
+# 1. ALFA V1.4
+with st.sidebar.expander("🤖 ALFA V1.4", expanded=is_v14_active):
     st.radio(
-        "Sonuçlar Seçimi",
-        options=[
-            "📊 Radar & Taramalar", 
-            "🔍 Hisse Teşhis Paneli", 
-            "📈 Hareketli Ortalama İnceleme"
-        ],
-        key="radio_sonuclar",
-        on_change=on_sonuclar_change,
-        label_visibility="collapsed"
+        "v14_opt", options=["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli"],
+        key="radio_v14", on_change=create_nav_callback("radio_v14", map_v14), label_visibility="collapsed"
     )
 
-# 2. AÇILIR KATEGORİ: VERİ YÖNETİMİ
+# 2. ALFA V2.4
+with st.sidebar.expander("🤖 ALFA V2.4", expanded=is_v24_active):
+    st.radio(
+        "v24_opt", options=["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli"],
+        key="radio_v24", on_change=create_nav_callback("radio_v24", map_v24), label_visibility="collapsed"
+    )
+
+# 3. ALFA V3.4
+with st.sidebar.expander("🤖 ALFA V3.4", expanded=is_v34_active):
+    st.radio(
+        "v34_opt", options=["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli"],
+        key="radio_v34", on_change=create_nav_callback("radio_v34", map_v34), label_visibility="collapsed"
+    )
+
+# 4. ALFA V1.2.3
+with st.sidebar.expander("🤖 ALFA V1.2.3", expanded=is_v123_active):
+    st.radio(
+        "v123_opt", options=["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli"],
+        key="radio_v123", on_change=create_nav_callback("radio_v123", map_v123), label_visibility="collapsed"
+    )
+
+# 5. HAREKETLİ ORTALAMA İNCELEME
+with st.sidebar.expander("📈 Trend & MA İnceleme", expanded=is_ma_active):
+    st.radio(
+        "ma_opt", options=["📈 Hareketli Ortalama İnceleme"],
+        key="radio_ma", on_change=create_nav_callback("radio_ma", map_ma), label_visibility="collapsed"
+    )
+
+# 6. VERİ YÖNETİMİ
 with st.sidebar.expander("📁 Veri Yönetimi", expanded=is_veri_active):
     st.radio(
-        "Veri Yönetimi Seçimi",
-        options=["📁 Veri Yönetimi (Excel Yükle)"],
-        key="radio_veri",
-        on_change=on_veri_change,
-        label_visibility="collapsed"
+        "veri_opt", options=["📁 Veri Yönetimi (Excel Yükle)"],
+        key="radio_veri", on_change=create_nav_callback("radio_veri", map_veri), label_visibility="collapsed"
     )
-
-menu_secim = st.session_state.nav_page
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(
     """
     <div style="font-size: 12px; color: #6c757d;">
         <b>Sistem Bilgisi</b><br>
-        • Sürüm: ALFA V2.4<br>
+        • Sürüm: ALFA Multi-Core V2.4<br>
         • Veri Kaynağı: Fintables & yfinance<br>
         • Durum: Aktif
     </div>
@@ -172,8 +202,12 @@ st.sidebar.markdown(
     unsafe_allow_html=True
 )
 
-# --- 3. VERİ YÖNETİMİ VE DOSYA YÜKLEME EKRANI ---
-if menu_secim == "📁 Veri Yönetimi (Excel Yükle)":
+# ==============================================================================
+# SEKMELER VE SAYFA İÇERİKLERİ
+# ==============================================================================
+
+# --- A) VERİ YÖNETİMİ EKRANI ---
+if current_page == "data_mgmt":
     st.subheader("📁 Fintables Veri Yönetimi ve Excel Yükleme")
     st.markdown("Modelin tarama yapabilmesi için güncel Fintables Excel dosyalarınızı aşağıya yükleyin. Yüklediğiniz dosyalar sekmeler ve sayfa yenilemeleri (F5) arasında **asla silinmez**.")
     
@@ -217,16 +251,14 @@ if menu_secim == "📁 Veri Yönetimi (Excel Yükle)":
 
             st.session_state.df_merged = df
             
-            # İSTANBUL SAAT DİLİMİNE GÖRE YÜKLEME TARİHİ
             now_tr = datetime.datetime.now(TURKEY_TZ)
             st.session_state.upload_time = now_tr.strftime("%d.%m.%Y %H:%M:%S")
 
-            # F5 REFRESH KORUMASI İÇİN DİSKE KAYIT
             df.to_pickle(DATA_CACHE_PATH)
             with open(META_CACHE_PATH, "w", encoding="utf-8") as f:
                 json.dump({"upload_time": st.session_state.upload_time}, f)
 
-            st.success(f"✅ Excel dosyaları başarıyla işlendi ve hafızaya kaydedildi! (Yükleme Zamanı: {st.session_state.upload_time}) Sol menüden **'📊 Radar & Taramalar'** sekmesine geçebilirsiniz.")
+            st.success(f"✅ Excel dosyaları başarıyla işlendi ve hafızaya kaydedildi! (Yükleme Zamanı: {st.session_state.upload_time}) Sol menüden algoritmalarınıza geçebilirsiniz.")
         except Exception as e:
             st.error(f"Dosyalar işlenirken hata oluştu: {e}")
     else:
@@ -235,8 +267,8 @@ if menu_secim == "📁 Veri Yönetimi (Excel Yükle)":
         else:
             st.info("👈 Lütfen her iki Excel dosyasını da yükleyin.")
 
-# --- 4. HAREKETLİ ORTALAMA İNCELEME PANELİ ---
-elif menu_secim == "📈 Hareketli Ortalama İnceleme":
+# --- B) HAREKETLİ ORTALAMA İNCELEME PANELİ ---
+elif current_page == "ma_review":
     st.markdown("### 📈 Hareketli Ortalama ve Trend İnceleme Paneli")
     
     if st.session_state.df_merged is not None:
@@ -257,7 +289,6 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     h_yf.columns = h_yf.columns.get_level_values(0)
                 h_yf = h_yf.sort_index().dropna()
                 
-                # Arka planda MA ve HHV hesapları
                 h_yf['MA20'] = h_yf['Close'].rolling(20).mean()
                 h_yf['MA75'] = h_yf['Close'].rolling(75).mean()
                 h_yf['MA200'] = h_yf['Close'].rolling(200).mean()
@@ -283,7 +314,6 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
 
                 fig = go.Figure()
                 
-                # Mum Grafiği
                 fig.add_trace(
                     go.Candlestick(
                         x=h_yf.index,
@@ -294,7 +324,6 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     )
                 )
                 
-                # Hareketli Ortalamalar
                 fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['MA20'], mode='lines', name='MA 20', line=dict(color='#2962FF', width=2)))
                 fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['MA75'], mode='lines', name='MA 75', line=dict(color='#089981', width=2)))
                 fig.add_trace(go.Scatter(x=h_yf.index, y=h_yf['MA200'], mode='lines', name='MA 200', line=dict(color='#2A2E39', width=2)))
@@ -319,7 +348,6 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                 if son_ma75: add_right_badge(fig, son_ma75, f"{son_ma75:.2f}", "#089981")
                 if son_ma200: add_right_badge(fig, son_ma200, f"{son_ma200:.2f}", "#2A2E39")
 
-                # SOL ÜST GÖSTERGE LEJANDI
                 info_html = (
                     f"<b>{secilen_hisse} · 1G</b><br>"
                     f"<span style='color:#2962FF;'>MA 20 close 0: <b>{son_ma20:.2f}</b></span><br>"
@@ -340,7 +368,6 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     font=dict(size=12, family="Arial")
                 )
 
-                # Tarih Hesaplamaları
                 max_dt = h_yf.index[-1]
                 min_dt = h_yf.index[0]
                 dt_1m = (max_dt - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
@@ -360,12 +387,11 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     hovermode="x unified",
                     plot_bgcolor="#FFFFFF",
                     paper_bgcolor="#FFFFFF",
-                    # TAM EKRANDA BİLE HİÇ KAYBOLMAYAN CANVASE İÇİ ZAMAN ÇİZELGESİ BUTONLARI
                     updatemenus=[
                         dict(
                             type="buttons",
                             direction="right",
-                            active=3, # Varsayılan 1Y
+                            active=3,
                             x=0.01,
                             y=1.08,
                             xanchor="left",
@@ -386,7 +412,6 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
                     ]
                 )
                 
-                # Initial Range set to 1Y
                 fig.update_xaxes(gridcolor="#F0F0F0", range=[dt_1y, dt_max])
                 fig.update_yaxes(
                     side="right", 
@@ -403,12 +428,11 @@ elif menu_secim == "📈 Hareketli Ortalama İnceleme":
         except Exception as e:
             st.error(f"Grafik yüklenirken bir hata oluştu: {e}")
 
-# --- 5. EXCEL VERİSİ GEREKTİREN DİĞER SEKMELER ---
-else:
+# --- C) ALFA V2.4 SEKMELERİ (MEVCUT DOLU MODELİNİZ) ---
+elif current_page in ["v24_radar", "v24_diag"]:
     if st.session_state.df_merged is not None:
         df = st.session_state.df_merged
 
-        # --- TEMEL KRİTERLER (FİLTRELEME) ---
         df["pdddLimit"] = np.where(df["ROE_0"] > 90, 8 + (df["ROE_0"] - 90) * 0.07, 8)
         
         a = df["Getiri_2a"] > oto_2a
@@ -429,8 +453,9 @@ else:
         temel_filtreliler = a & b & c & d & ee & f & ((h | g) | (hx | gx) | efkTeyit) & j & roeTeyit & k
         df_temel = df[temel_filtreliler].copy()
 
-        # --- RADAR & TARAMALAR EKRANI ---
-        if menu_secim == "📊 Radar & Taramalar":
+        # V2.4 RADAR & TARAMALAR
+        if current_page == "v24_radar":
+            st.markdown("### 🤖 ALFA V2.4 - Radar & Taramalar")
             teknik_asanadan_gecenler = []
             if len(df_temel) > 0:
                 with st.spinner("🔄 Temelden geçen hisselerin hareketli ortalamaları (MA20, MA75, MA200) anlık çekiliyor..."):
@@ -497,7 +522,7 @@ else:
                     df_sonuc = df_teknik.sort_values(by="SKOR", ascending=False).reset_index(drop=True)
                     df_sonuc.index += 1
 
-                    st.markdown("### 🏆 Nihai Portföy Adayları (En İyi Skorlar)")
+                    st.markdown("### 🏆 ALFA V2.4 Portföy Adayları (En İyi Skorlar)")
                     
                     def highlight_top5(s):
                         return ['background-color: #d4edda; font-weight: bold;' if s.name <= 5 else '' for _ in s]
@@ -531,10 +556,10 @@ else:
             else:
                 st.warning("Temel kriterleri sağlayan hisse bulunamadı.")
 
-        # --- HİSSE TEŞHİS PANELİ ---
-        elif menu_secim == "🔍 Hisse Teşhis Paneli":
-            st.markdown("### 🔍 Hisseler İçin Derinlemesine Teşhis ve Puanlama Paneli")
-            st.markdown("İstediğiniz hisse kodunu seçerek temel filtrelerden geçip geçmediğini, takıldığı kriterleri, teknik MA durumunu ve modelden aldığı skor detaylarını inceleyebilirsiniz.")
+        # V2.4 HİSSE TEŞHİS PANELİ
+        elif current_page == "v24_diag":
+            st.markdown("### 🔍 ALFA V2.4 - Hisse Teşhis Paneli")
+            st.markdown("İstediğiniz hisse kodunu seçerek temel filtrelerden geçip geçmediğini, takıldığı kriterleri ve teknik MA durumunu inceleyebilirsiniz.")
             
             hisse_listesi = [""] + sorted(df["Kod"].dropna().astype(str).str.upper().unique().tolist())
             secilen_hisse = st.selectbox("Hisse Seçin / Arayın (Örn: CRDFA, EGEGY, FORTE)", options=hisse_listesi)
@@ -615,7 +640,7 @@ else:
                         st.write(f"- Halka Açıklık: {'✅ Geçti' if c_k else '❌ Kaldı'}")
 
                     with col2:
-                        st.markdown(f"#### 🎯 Skor: {nihai_skor:.2f}")
+                        st.markdown(f"#### 🎯 ALFA V2.4 Skor: {nihai_skor:.2f}")
                         st.write(f"- ROE Katkısı (%30): {(r_skor * 0.30):.2f}")
                         st.write(f"- Büyüme Katkısı (%20): {(b_skor * 0.20):.2f}")
                         st.write(f"- Trend Katkısı (%18): {(tr_skor * 0.18):.2f}")
@@ -663,3 +688,32 @@ else:
                     st.warning(f"'{secilen_hisse}' kodlu hisse Fintables dosyalarında bulunamadı.")
     else:
         st.warning("👈 Lütfen sol menüden **'📁 Veri Yönetimi (Excel Yükle)'** seçeneğine tıklayarak dosyalarınızı yükleyin.")
+
+# --- D) YENİ ALGORİTMA ŞABLONLARI (V1.4, V3.4, V1.2.3) ---
+
+# ALFA V1.4
+elif current_page == "v14_radar":
+    st.markdown("### 🤖 ALFA V1.4 - Radar & Taramalar")
+    st.info("🛠️ **ALFA V1.4** algoritması entegrasyona hazırdır. Bu algoritmanın filtre kurgularını ve matematiksel formüllerini paylaştığınızda tarama paneli buraya eklenecektir.")
+
+elif current_page == "v14_diag":
+    st.markdown("### 🔍 ALFA V1.4 - Hisse Teşhis Paneli")
+    st.info("🛠️ **ALFA V1.4** teşhis paneli kurgulanmaya hazırdır. Algoritma detayları tanımlandığında hisse bazlı analiz ekranı burada görünecektir.")
+
+# ALFA V3.4
+elif current_page == "v34_radar":
+    st.markdown("### 🤖 ALFA V3.4 - Radar & Taramalar")
+    st.info("🛠️ **ALFA V3.4** algoritması entegrasyona hazırdır. Bu algoritmanın filtre kurgularını ve matematiksel formüllerini paylaştığınızda tarama paneli buraya eklenecektir.")
+
+elif current_page == "v34_diag":
+    st.markdown("### 🔍 ALFA V3.4 - Hisse Teşhis Paneli")
+    st.info("🛠️ **ALFA V3.4** teşhis paneli kurgulanmaya hazırdır. Algoritma detayları tanımlandığında hisse bazlı analiz ekranı burada görünecektir.")
+
+# ALFA V1.2.3
+elif current_page == "v123_radar":
+    st.markdown("### 🤖 ALFA V1.2.3 - Radar & Taramalar")
+    st.info("🛠️ **ALFA V1.2.3** algoritması entegrasyona hazırdır. Bu algoritmanın filtre kurgularını ve matematiksel formüllerini paylaştığınızda tarama paneli buraya eklenecektir.")
+
+elif current_page == "v123_diag":
+    st.markdown("### 🔍 ALFA V1.2.3 - Hisse Teşhis Paneli")
+    st.info("🛠️ **ALFA V1.2.3** teşhis paneli kurgulanmaya hazırdır. Algoritma detayları tanımlandığında hisse bazlı analiz ekranı burada görünecektir.")
