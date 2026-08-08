@@ -129,6 +129,20 @@ def ekle_efektif_kolonlar(df):
     df["ef_FAVOKBuyume_1"] = ef("FAVOKBuyume_1", "FAVOKBuyume_2")
     return df
 
+
+# --- TEŞHİS PANELİ DEĞER BİÇİMLEYİCİ ---
+def dg(x):
+    """Teşhis panellerinde kriter değerini kısa/okunur formatlar (Mr=milyar, Mn=milyon)."""
+    try:
+        xf = float(x)
+    except (TypeError, ValueError):
+        return str(x)
+    if abs(xf) >= 1e9:
+        return f"{xf/1e9:.2f}Mr"
+    if abs(xf) >= 1e6:
+        return f"{xf/1e6:.2f}Mn"
+    return f"{xf:.2f}"
+
 # --- SESSION STATE & F5 VERİ KALICILIĞI YÖNETİMİ ---
 if "df_merged" not in st.session_state: st.session_state.df_merged = None
 if "upload_time" not in st.session_state: st.session_state.upload_time = None
@@ -512,28 +526,24 @@ elif current_page in ["v113_radar", "v113_diag"]:
                     c_k = bool(th['HAOran'] < 60)
 
                     takilan = []
-                    if not c_a: takilan.append("2A Getiri > XU100")
-                    if not c_b: takilan.append("ROE > TÜFE")
-                    if not c_c: takilan.append("Net Borç / FAVÖK < 4")
-                    if not c_d: takilan.append("PD/DD < Sınır")
-                    if not c_e: takilan.append("2H Getiri Şartı")
-                    if not c_f: takilan.append("Net Satış Büyümesi > 0")
-                    if not (c_h or c_g): takilan.append("Büyüme Şartı (FAVÖK↑ veya BrütEFK↑&EFK↑)")
-                    if not c_j: takilan.append("1A Getiri > -15")
-                    if not c_k: takilan.append("Halka Açıklık < 60")
+                    krit = [
+                        ("2A Getiri > XU100", c_a, f"%{th['Getiri_2a']:.2f} vs XU100 %{oto_2a:.2f}"),
+                        ("ROE > TÜFE", c_b, f"ROE %{th['ROE_0']:.2f} vs TÜFE %{tufe_12:.2f}"),
+                        ("Net Borç/FAVÖK < 4", c_c, f"{dg(th['NetBorc_FAVOK'])}"),
+                        ("PD/DD < Sınır", c_d, f"PDDD {dg(th['PDDD'])} vs sınır {dg(p_lim)}"),
+                        ("2H Getiri Şartı", c_e, f"%{th['Getiri_2h']:.2f} vs eşik %{(oto_2h - 10):.2f}"),
+                        ("Net Satış Büyümesi > 0", c_f, f"%{th['NetSatisBuyume']:.2f}"),
+                        ("Büyüme (FAVÖK↑ veya BrütEFK↑&EFK↑)", (c_h or c_g), f"FAVÖKBüy %{th['FAVOKBuyume']:.1f} · EFKBüy %{th['EFKBuyume']:.1f} · BrütBüy %{th['BrutEFKBuyume']:.1f}"),
+                        ("1A Getiri > -15", c_j, f"%{th['Getiri_1a']:.2f}"),
+                        ("Halka Açıklık < 60", c_k, f"{dg(th['HAOran'])}"),
+                    ]
+                    takilan = [f"{l} → ({v})" for l, ok, v in krit if not ok]
 
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"#### 🏛️ ALFA V1.1.3 Temel Analiz ({secilen_hisse})")
-                        st.write(f"- 2A Getiri > XU100: {'✅ Geçti' if c_a else '❌ Kaldı'}")
-                        st.write(f"- ROE > TÜFE: {'✅ Geçti' if c_b else '❌ Kaldı'}")
-                        st.write(f"- Net Borç/FAVÖK < 4: {'✅ Geçti' if c_c else '❌ Kaldı'}")
-                        st.write(f"- PD/DD < Sınır: {'✅ Geçti' if c_d else '❌ Kaldı'}")
-                        st.write(f"- 2H Getiri Şartı: {'✅ Geçti' if c_e else '❌ Kaldı'}")
-                        st.write(f"- Net Satış Büyümesi > 0: {'✅ Geçti' if c_f else '❌ Kaldı'}")
-                        st.write(f"- Büyüme (h veya g): {'✅ Geçti' if (c_h or c_g) else '❌ Kaldı'}")
-                        st.write(f"- 1A Getiri > -15: {'✅ Geçti' if c_j else '❌ Kaldı'}")
-                        st.write(f"- Halka Açıklık < 60: {'✅ Geçti' if c_k else '❌ Kaldı'}")
+                        for l, ok, v in krit:
+                            st.write(f"- {l}: {'✅ Geçti' if ok else '❌ Kaldı'} ({v})")
 
                     with col2:
                         st.markdown(f"#### 📈 ALFA V1.1.3 Teknik Şartlar")
@@ -550,7 +560,7 @@ elif current_page in ["v113_radar", "v113_diag"]:
                                     t1 = m75 > m200
                                     st.write(f"- **MA75 > MA200:** {'✅' if t1 else '❌'} ({m75:.2f} > {m200:.2f})")
                                     if not t1:
-                                        takilan.append("ALFA V1.1.3 Teknik Şartı (MA75 > MA200)")
+                                        takilan.append(f"Teknik: MA75>MA200 sağlanmadı ({m75:.2f} ≤ {m200:.2f})")
                         except Exception as ex: st.error(f"Teknik hata: {ex}")
 
                     if takilan:
@@ -750,30 +760,25 @@ elif current_page in ["v14_radar", "v14_diag"]:
                     c_k = bool(th['HAOran'] < 60)
 
                     takilan = []
-                    if not c_a: takilan.append("ROE > TÜFE")
-                    if not c_b: takilan.append("Net Borç / FAVÖK < 4")
-                    if not c_d: takilan.append("PD/DD < Sınır")
-                    if not c_ee: takilan.append("2H Getiri Şartı")
-                    if not c_f: takilan.append("Net Satış Büyümesi > 0")
-                    if not (c_hx or c_gx or c_teyit): takilan.append("Büyüme / Teyit Şartı")
-                    if not c_h: takilan.append("2A Getiri > XUTUM")
-                    if not c_j: takilan.append("1A Getiri > -15")
-                    if not c_roe_t: takilan.append("ROE Teyit Şartı")
-                    if not c_k: takilan.append("Halka Açıklık < 60")
+                    krit = [
+                        ("ROE > TÜFE", c_a, f"ROE %{th['ROE_0']:.2f} vs TÜFE %{tufe_12:.2f}"),
+                        ("Net Borç/FAVÖK < 4", c_b, f"{dg(th['NetBorc_FAVOK'])}"),
+                        ("PD/DD < Sınır", c_d, f"PDDD {dg(th['PDDD'])} vs sınır {dg(p_lim)}"),
+                        ("2H Getiri Şartı", c_ee, f"%{th['Getiri_2h']:.2f} vs eşik %{(oto_xutum_2h - 10):.2f}"),
+                        ("Net Satış Büyümesi > 0", c_f, f"%{th['NetSatisBuyume']:.2f}"),
+                        ("Büyüme/Teyit", (c_hx or c_gx or c_teyit), f"FAVÖKBüy %{th['FAVOKBuyume']:.1f} · EFKBüy %{th['EFKBuyume']:.1f} · BrütBüy %{th['BrutEFKBuyume']:.1f}"),
+                        ("2A Getiri > XUTUM", c_h, f"%{th['Getiri_2a']:.2f} vs XUTUM %{oto_xutum_2a:.2f}"),
+                        ("1A Getiri > -15", c_j, f"%{th['Getiri_1a']:.2f}"),
+                        ("ROE Teyit", c_roe_t, f"ROE %{th['ROE_0']:.2f} vs efROE-1 %{th['ef_ROE_1']:.2f} / efROE-4 %{th['ef_ROE_4']:.2f}"),
+                        ("Halka Açıklık < 60", c_k, f"{dg(th['HAOran'])}"),
+                    ]
+                    takilan = [f"{l} → ({v})" for l, ok, v in krit if not ok]
 
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"#### 🏛️ ALFA V1.4 Temel Analiz ({secilen_hisse})")
-                        st.write(f"- ROE > TÜFE: {'✅ Geçti' if c_a else '❌ Kaldı'}")
-                        st.write(f"- Net Borç/FAVÖK < 4: {'✅ Geçti' if c_b else '❌ Kaldı'}")
-                        st.write(f"- PD/DD < Sınır: {'✅ Geçti' if c_d else '❌ Kaldı'}")
-                        st.write(f"- 2H Getiri Şartı: {'✅ Geçti' if c_ee else '❌ Kaldı'}")
-                        st.write(f"- Net Satış Büyümesi > 0: {'✅ Geçti' if c_f else '❌ Kaldı'}")
-                        st.write(f"- Büyüme/Teyit: {'✅ Geçti' if (c_hx or c_gx or c_teyit) else '❌ Kaldı'}")
-                        st.write(f"- 2A Getiri > XUTUM: {'✅ Geçti' if c_h else '❌ Kaldı'}")
-                        st.write(f"- 1A Getiri > -15: {'✅ Geçti' if c_j else '❌ Kaldı'}")
-                        st.write(f"- ROE Teyit: {'✅ Geçti' if c_roe_t else '❌ Kaldı'}")
-                        st.write(f"- Halka Açıklık < 60: {'✅ Geçti' if c_k else '❌ Kaldı'}")
+                        for l, ok, v in krit:
+                            st.write(f"- {l}: {'✅ Geçti' if ok else '❌ Kaldı'} ({v})")
 
                     with col2:
                         st.markdown(f"#### 📈 ALFA V1.4 Teknik Şartlar")
@@ -804,7 +809,12 @@ elif current_page in ["v14_radar", "v14_diag"]:
                                     st.write(f"- **Fiyat > HHV(252)*0.77:** {'✅' if t4 else '❌'} ({c_val:.2f} > {hhv_limit:.2f})")
                                     
                                     if not (t1 and t2 and t3 and t4):
-                                        takilan.append("ALFA V1.4 Teknik Şartı (C>MA200, C>MA75, MA20>MA60, C>HHV*0.77)")
+                                        _tf = []
+                                        if not t1: _tf.append(f"C>MA200 ({c_val:.2f}≤{m200:.2f})")
+                                        if not t2: _tf.append(f"C>MA75 ({c_val:.2f}≤{m75:.2f})")
+                                        if not t3: _tf.append(f"MA20>MA60 ({m20:.2f}≤{m60:.2f})")
+                                        if not t4: _tf.append(f"C>HHV*0.77 ({c_val:.2f}≤{hhv_limit:.2f})")
+                                        takilan.append("Teknik → " + "; ".join(_tf))
                         except Exception as e: st.error(f"Teknik hata: {e}")
 
                     if takilan:
@@ -943,30 +953,25 @@ elif current_page in ["v24_radar", "v24_diag"]:
                     c_roe_t = bool((th['ROE_0'] >= th['ef_ROE_1']) or (th['ROE_0'] >= th['ef_ROE_4']))
                     
                     takilan = []
-                    if not c_b: takilan.append("ROE > TÜFE")
-                    if not c_a: takilan.append("2A Getiri > XU100")
-                    if not c_ee: takilan.append("2H Getiri Şartı")
-                    if not c_d: takilan.append("PD/DD < Sınır")
-                    if not c_c: takilan.append("Net Borç / FAVÖK < 4")
-                    if not c_f: takilan.append("Net Satış Büyümesi > 0")
-                    if not (c_g or c_h or c_teyit): takilan.append("Büyüme / Teyit Kriterleri")
-                    if not c_roe_t: takilan.append("ROE Teyit Şartı")
-                    if not c_j: takilan.append("1A Getiri > -15")
-                    if not c_k: takilan.append("Halka Açıklık < 60")
+                    krit = [
+                        ("ROE > TÜFE", c_b, f"ROE %{th['ROE_0']:.2f} vs TÜFE %{tufe_12:.2f}"),
+                        ("2A Getiri > XU100", c_a, f"%{th['Getiri_2a']:.2f} vs XU100 %{oto_2a:.2f}"),
+                        ("2H Getiri Şartı", c_ee, f"%{th['Getiri_2h']:.2f} vs eşik %{(oto_2h - 10):.2f}"),
+                        ("PD/DD < Sınır", c_d, f"PDDD {dg(th['PDDD'])} vs sınır {dg(p_lim)}"),
+                        ("Net Borç/FAVÖK < 4", c_c, f"{dg(th['NetBorc_FAVOK'])}"),
+                        ("Net Satış Büyümesi > 0", c_f, f"%{th['NetSatisBuyume']:.2f}"),
+                        ("Büyüme/Teyit", (c_g or c_h or c_teyit), f"FAVÖKBüy %{th['FAVOKBuyume']:.1f} · EFKBüy %{th['EFKBuyume']:.1f} · BrütBüy %{th['BrutEFKBuyume']:.1f}"),
+                        ("ROE Teyit", c_roe_t, f"ROE %{th['ROE_0']:.2f} vs efROE-1 %{th['ef_ROE_1']:.2f} / efROE-4 %{th['ef_ROE_4']:.2f}"),
+                        ("1A Getiri > -15", c_j, f"%{th['Getiri_1a']:.2f}"),
+                        ("Halka Açıklık < 60", c_k, f"{dg(th['HAOran'])}"),
+                    ]
+                    takilan = [f"{l} → ({v})" for l, ok, v in krit if not ok]
 
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"#### 🏛️ Temel Analiz ({secilen_hisse})")
-                        st.write(f"- ROE > TÜFE: {'✅ Geçti' if c_b else '❌ Kaldı'}")
-                        st.write(f"- 2A Getiri > XU100: {'✅ Geçti' if c_a else '❌ Kaldı'}")
-                        st.write(f"- 2H Getiri Şartı: {'✅ Geçti' if c_ee else '❌ Kaldı'}")
-                        st.write(f"- PD/DD < Sınır: {'✅ Geçti' if c_d else '❌ Kaldı'}")
-                        st.write(f"- Net Borç/FAVÖK: {'✅ Geçti' if c_c else '❌ Kaldı'}")
-                        st.write(f"- Net Satış Büyümesi: {'✅ Geçti' if c_f else '❌ Kaldı'}")
-                        st.write(f"- Büyüme/Teyit: {'✅ Geçti' if (c_g or c_h or c_teyit) else '❌ Kaldı'}")
-                        st.write(f"- ROE Teyit: {'✅ Geçti' if c_roe_t else '❌ Kaldı'}")
-                        st.write(f"- 1A Getiri > -15: {'✅ Geçti' if c_j else '❌ Kaldı'}")
-                        st.write(f"- Halka Açıklık: {'✅ Geçti' if c_k else '❌ Kaldı'}")
+                        for l, ok, v in krit:
+                            st.write(f"- {l}: {'✅ Geçti' if ok else '❌ Kaldı'} ({v})")
 
                     with col2:
                         st.markdown(f"#### 📈 Teknik Detaylar")
@@ -982,7 +987,11 @@ elif current_page in ["v24_radar", "v24_diag"]:
                                     m75 = float(cls.rolling(75).mean().iloc[-1])
                                     m200 = float(cls.rolling(200).mean().iloc[-1])
                                     teknik_gecti = bool((m75 > m200) and (m20 > m75))
-                                    if not teknik_gecti: takilan.append("Teknik MA Kuralı (MA75 > MA200 ve MA20 > MA75)")
+                                    if not teknik_gecti:
+                                        _tf = []
+                                        if not (m75 > m200): _tf.append(f"MA75>MA200 ({m75:.2f}≤{m200:.2f})")
+                                        if not (m20 > m75): _tf.append(f"MA20>MA75 ({m20:.2f}≤{m75:.2f})")
+                                        takilan.append("Teknik → " + "; ".join(_tf))
 
                                     st.write(f"- **Kapanış:** {float(th['Kapanis']):.2f}")
                                     st.write(f"- **MA20:** {m20:.2f}")
@@ -1143,30 +1152,25 @@ elif current_page in ["v34_radar", "v34_diag"]:
                     c_k = bool(th['HAOran'] < 60)
 
                     takilan = []
-                    if not c_a: takilan.append("2A Getiri > XU100")
-                    if not c_b: takilan.append("ROE > TÜFE")
-                    if not c_c: takilan.append("Net Borç / FAVÖK < 4")
-                    if not c_d: takilan.append("PD/DD < Sınır")
-                    if not c_e: takilan.append("2H Getiri Şartı")
-                    if not c_f: takilan.append("1A Getiri > -15")
-                    if not c_ns: takilan.append("Net Satış Büyümesi > 0")
-                    if not (c_hx or c_gx or c_teyit): takilan.append("Büyüme / Teyit Şartı")
-                    if not c_roe_t: takilan.append("ROE Teyit Şartı")
-                    if not c_k: takilan.append("Halka Açıklık < 60")
+                    krit = [
+                        ("2A Getiri > XU100", c_a, f"%{th['Getiri_2a']:.2f} vs XU100 %{oto_2a:.2f}"),
+                        ("ROE > TÜFE", c_b, f"ROE %{th['ROE_0']:.2f} vs TÜFE %{tufe_12:.2f}"),
+                        ("Net Borç/FAVÖK < 4", c_c, f"{dg(th['NetBorc_FAVOK'])}"),
+                        ("PD/DD < Sınır", c_d, f"PDDD {dg(th['PDDD'])} vs sınır {dg(p_lim)}"),
+                        ("2H Getiri Şartı", c_e, f"%{th['Getiri_2h']:.2f} vs eşik %{(oto_2h - 10):.2f}"),
+                        ("1A Getiri > -15", c_f, f"%{th['Getiri_1a']:.2f}"),
+                        ("Net Satış Büyümesi > 0", c_ns, f"%{th['NetSatisBuyume']:.2f}"),
+                        ("Büyüme/Teyit", (c_hx or c_gx or c_teyit), f"FAVÖKBüy %{th['FAVOKBuyume']:.1f} · EFKBüy %{th['EFKBuyume']:.1f} · BrütBüy %{th['BrutEFKBuyume']:.1f}"),
+                        ("ROE Teyit", c_roe_t, f"ROE %{th['ROE_0']:.2f} vs efROE-1 %{th['ef_ROE_1']:.2f} / efROE-4 %{th['ef_ROE_4']:.2f}"),
+                        ("Halka Açıklık < 60", c_k, f"{dg(th['HAOran'])}"),
+                    ]
+                    takilan = [f"{l} → ({v})" for l, ok, v in krit if not ok]
 
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"#### 🏛️ ALFA V3.4 Temel Analiz ({secilen_hisse})")
-                        st.write(f"- 2A Getiri > XU100: {'✅ Geçti' if c_a else '❌ Kaldı'}")
-                        st.write(f"- ROE > TÜFE: {'✅ Geçti' if c_b else '❌ Kaldı'}")
-                        st.write(f"- Net Borç/FAVÖK < 4: {'✅ Geçti' if c_c else '❌ Kaldı'}")
-                        st.write(f"- PD/DD < Sınır: {'✅ Geçti' if c_d else '❌ Kaldı'}")
-                        st.write(f"- 2H Getiri Şartı: {'✅ Geçti' if c_e else '❌ Kaldı'}")
-                        st.write(f"- 1A Getiri > -15: {'✅ Geçti' if c_f else '❌ Kaldı'}")
-                        st.write(f"- Net Satış Büyümesi > 0: {'✅ Geçti' if c_ns else '❌ Kaldı'}")
-                        st.write(f"- Büyüme/Teyit: {'✅ Geçti' if (c_hx or c_gx or c_teyit) else '❌ Kaldı'}")
-                        st.write(f"- ROE Teyit: {'✅ Geçti' if c_roe_t else '❌ Kaldı'}")
-                        st.write(f"- Halka Açıklık < 60: {'✅ Geçti' if c_k else '❌ Kaldı'}")
+                        for l, ok, v in krit:
+                            st.write(f"- {l}: {'✅ Geçti' if ok else '❌ Kaldı'} ({v})")
 
                     with col2:
                         st.markdown(f"#### 📈 ALFA V3.4 Teknik Şartlar")
@@ -1193,7 +1197,11 @@ elif current_page in ["v34_radar", "v34_diag"]:
                                     st.write(f"- **Kapanış > MA75:** {'✅' if t3 else '❌'} ({c_val:.2f} > {m75:.2f})")
 
                                     if not (t1 and t2 and t3):
-                                        takilan.append("ALFA V3.4 Teknik Şartı (MA20>MA60, MA75>MA200, C>MA75)")
+                                        _tf = []
+                                        if not t1: _tf.append(f"MA20>MA60 ({m20:.2f}≤{m60:.2f})")
+                                        if not t2: _tf.append(f"MA75>MA200 ({m75:.2f}≤{m200:.2f})")
+                                        if not t3: _tf.append(f"C>MA75 ({c_val:.2f}≤{m75:.2f})")
+                                        takilan.append("Teknik → " + "; ".join(_tf))
                         except Exception as ex: st.error(f"Teknik hata: {ex}")
 
                     if takilan:
@@ -1338,22 +1346,21 @@ elif current_page in ["v123_radar", "v123_diag"]:
                     c_f = bool(th['Getiri_1a'] > -15)
 
                     takilan = []
-                    if not c_a: takilan.append("2A Getiri > XU100")
-                    if not c_b: takilan.append("ROE > TÜFE")
-                    if not c_c: takilan.append("Net Borç / FAVÖK < 4")
-                    if not c_d: takilan.append("PD/DD < Sınır")
-                    if not c_e: takilan.append("2H Getiri Şartı")
-                    if not c_f: takilan.append("1A Getiri > -15")
+                    krit = [
+                        ("2A Getiri > XU100", c_a, f"%{th['Getiri_2a']:.2f} vs XU100 %{oto_2a:.2f}"),
+                        ("ROE > TÜFE", c_b, f"ROE %{th['ROE_0']:.2f} vs TÜFE %{tufe_12:.2f}"),
+                        ("Net Borç/FAVÖK < 4", c_c, f"{dg(th['NetBorc_FAVOK'])}"),
+                        ("PD/DD < Sınır", c_d, f"PDDD {dg(th['PDDD'])} vs sınır {dg(p_lim)}"),
+                        ("2H Getiri Şartı", c_e, f"%{th['Getiri_2h']:.2f} vs eşik %{(oto_2h - 10):.2f}"),
+                        ("1A Getiri > -15", c_f, f"%{th['Getiri_1a']:.2f}"),
+                    ]
+                    takilan = [f"{l} → ({v})" for l, ok, v in krit if not ok]
 
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"#### 🏛️ ALFA V1.2.3 Temel Analiz ({secilen_hisse})")
-                        st.write(f"- 2A Getiri > XU100: {'✅ Geçti' if c_a else '❌ Kaldı'}")
-                        st.write(f"- ROE > TÜFE: {'✅ Geçti' if c_b else '❌ Kaldı'}")
-                        st.write(f"- Net Borç/FAVÖK < 4: {'✅ Geçti' if c_c else '❌ Kaldı'}")
-                        st.write(f"- PD/DD < Sınır: {'✅ Geçti' if c_d else '❌ Kaldı'}")
-                        st.write(f"- 2H Getiri Şartı: {'✅ Geçti' if c_e else '❌ Kaldı'}")
-                        st.write(f"- 1A Getiri > -15: {'✅ Geçti' if c_f else '❌ Kaldı'}")
+                        for l, ok, v in krit:
+                            st.write(f"- {l}: {'✅ Geçti' if ok else '❌ Kaldı'} ({v})")
                         st.caption("ℹ️ V1.2.3'te büyüme (NetSatış/FAVÖK/EFK) ve halka açıklık (HAOran) temel filtrede yer almaz; büyüme yalnızca skorlamada kullanılır.")
 
                     with col2:
@@ -1375,7 +1382,10 @@ elif current_page in ["v123_radar", "v123_diag"]:
                                     st.write(f"- **MA20 > MA60:** {'✅' if t1 else '❌'} ({m20:.2f} > {m60:.2f})")
                                     st.write(f"- **MA75 > MA200:** {'✅' if t2 else '❌'} ({m75:.2f} > {m200:.2f})")
                                     if not (t1 and t2):
-                                        takilan.append("ALFA V1.2.3 Teknik Şartı (MA20>MA60, MA75>MA200)")
+                                        _tf = []
+                                        if not t1: _tf.append(f"MA20>MA60 ({m20:.2f}≤{m60:.2f})")
+                                        if not t2: _tf.append(f"MA75>MA200 ({m75:.2f}≤{m200:.2f})")
+                                        takilan.append("Teknik → " + "; ".join(_tf))
                         except Exception as ex: st.error(f"Teknik hata: {ex}")
 
                     if takilan:
