@@ -18,21 +18,50 @@ TURKEY_TZ = ZoneInfo("Europe/Istanbul")
 DATA_CACHE_PATH = "alfa_data_cache.pkl"
 META_CACHE_PATH = "alfa_meta_cache.json"
 
-# --- ÖZGÜN CSS (Pointer İşareti ve Menü Tasarımı) ---
+# --- ÖZGÜN CSS (Fintables tarzı profesyonel sidebar) ---
 st.markdown(
     """
     <style>
-    div[data-testid="stSidebar"] div[role="radiogroup"] > label {
-        cursor: pointer !important;
-        padding: 5px 10px !important;
-        border-radius: 6px !important;
-        font-size: 13px !important;
-        color: #334155 !important;
-        transition: all 0.2s ease;
+    /* Sidebar genel */
+    section[data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid #eef0f3; }
+    section[data-testid="stSidebar"] > div { padding-top: 8px; }
+
+    /* Bölüm başlığı etiketleri (küçük, silik, harf aralıklı) */
+    .alfa-section {
+        font-size: 11px; font-weight: 700; letter-spacing: .06em;
+        text-transform: uppercase; color: #94a3b8;
+        margin: 14px 6px 6px 6px;
     }
-    div[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
+
+    /* Expander'ları düz nav satırına çevir (kart görünümünü kaldır) */
+    section[data-testid="stSidebar"] [data-testid="stExpander"] {
+        border: none !important; box-shadow: none !important; background: transparent !important;
+        margin: 0 !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stExpander"] > details {
+        border: none !important; background: transparent !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stExpander"] > details > summary {
+        padding: 9px 12px !important; border-radius: 10px !important;
+        font-size: 14px !important; font-weight: 600 !important; color: #1f2d3d !important;
+        list-style: none !important; transition: background .15s ease; cursor: pointer;
+    }
+    section[data-testid="stSidebar"] [data-testid="stExpander"] > details > summary:hover {
         background-color: #f1f5f9 !important;
-        color: #0f172a !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stExpander"] > details[open] > summary {
+        background-color: #eef4ff !important; color: #1d4ed8 !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary svg { color: #94a3b8; }
+
+    /* Alt seçenekler (Radar / Teşhis) — girintili, düz link hissi */
+    section[data-testid="stSidebar"] div[role="radiogroup"] { margin-left: 8px; border-left: 2px solid #eef0f3; padding-left: 6px; }
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label {
+        cursor: pointer !important; padding: 6px 10px !important; border-radius: 8px !important;
+        font-size: 13px !important; color: #475569 !important; transition: all .15s ease;
+    }
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
+        background-color: #f1f5f9 !important; color: #0f172a !important;
     }
     </style>
     """,
@@ -338,6 +367,7 @@ if "nav_page" not in st.session_state:
     st.session_state.radio_v34 = None
     st.session_state.radio_v123 = None
     st.session_state.radio_ortak = None
+    st.session_state.radio_portfoy = None
     st.session_state.radio_ma = None
     st.session_state.radio_veri = None
 
@@ -353,7 +383,7 @@ if st.session_state.df_merged is None:
             pass
 
 # --- NAVİGASYON CALLBACK SİSTEMİ ---
-RADIO_KEYS = ["radio_v113", "radio_v14", "radio_v24", "radio_v34", "radio_v123", "radio_ortak", "radio_ma", "radio_veri"]
+RADIO_KEYS = ["radio_v113", "radio_v14", "radio_v24", "radio_v34", "radio_v123", "radio_ortak", "radio_portfoy", "radio_ma", "radio_veri"]
 
 def create_nav_callback(key, mapping):
     def callback():
@@ -373,16 +403,7 @@ map_v123 = {"📊 Radar & Taramalar": "v123_radar", "🔍 Hisse Teşhis Paneli":
 map_ortak = {"🎯 Ortak Portföy Tablosu": "ortak_portfoy"}
 map_ma = {"📈 Hareketli Ortalama İnceleme": "ma_review"}
 map_veri = {"📁 Veri Yönetimi (Excel Yükle)": "data_mgmt"}
-
-# --- ÜST DÜZEY AYAK (LEG) GEÇİŞİ ---
-def _leg_cb():
-    v = st.session_state.get("leg_radio", "")
-    if "Portföy" in v:
-        if not str(st.session_state.nav_page).startswith("portfoy"):
-            st.session_state.nav_page = "portfoy_home"
-    else:
-        if str(st.session_state.nav_page).startswith("portfoy"):
-            st.session_state.nav_page = "v24_radar"
+map_portfoy = {"🏠 Genel Bakış": "portfoy_home"}
 
 # --- ÜST BAŞLIK & OTOMATİK MAKRO GÖSTERGESİ ---
 header_col1, header_col2 = st.columns([3, 2])
@@ -410,63 +431,53 @@ with header_col2:
 
 st.markdown("---")
 
-# --- SOL MENÜ NAVİGASYONU ---
+# --- SOL MENÜ NAVİGASYONU (Fintables tarzı düz, gruplu) ---
 st.sidebar.markdown("### ⚡ ALFA Terminal")
-st.sidebar.markdown("---")
 
 current_page = st.session_state.nav_page
-aktif_leg = "portfoy" if str(current_page).startswith("portfoy") else "algoritma"
 
-# Üst düzey: iki ana ayak
-if "leg_radio" not in st.session_state:
-    st.session_state.leg_radio = "🔍 Alfa Algoritmik Filtreleme"
-st.sidebar.radio(
-    "Uygulama Ayağı",
-    options=["🔍 Alfa Algoritmik Filtreleme", "💼 Portföy Yönetimi"],
-    key="leg_radio",
-    on_change=_leg_cb,
-    label_visibility="collapsed",
-)
-st.sidebar.markdown("---")
+is_v113_active = current_page in ["v113_radar", "v113_diag"]
+is_v14_active = current_page in ["v14_radar", "v14_diag"]
+is_v24_active = current_page in ["v24_radar", "v24_diag"]
+is_v34_active = current_page in ["v34_radar", "v34_diag"]
+is_v123_active = current_page in ["v123_radar", "v123_diag"]
+is_ortak_active = current_page == "ortak_portfoy"
+is_ma_active = current_page == "ma_review"
+is_veri_active = current_page == "data_mgmt"
+is_portfoy_active = current_page == "portfoy_home"
 
-if aktif_leg == "algoritma":
-    st.sidebar.markdown("#### 🔍 Alfa Algoritmik Filtreleme")
-    is_v113_active = current_page in ["v113_radar", "v113_diag"]
-    is_v14_active = current_page in ["v14_radar", "v14_diag"]
-    is_v24_active = current_page in ["v24_radar", "v24_diag"]
-    is_v34_active = current_page in ["v34_radar", "v34_diag"]
-    is_v123_active = current_page in ["v123_radar", "v123_diag"]
-    is_ortak_active = current_page == "ortak_portfoy"
-    is_ma_active = current_page == "ma_review"
-    is_veri_active = current_page == "data_mgmt"
+# ── Bölüm 1: Alfa Algoritmik Filtreleme ──
+st.sidebar.markdown('<div class="alfa-section">🔍 Alfa Algoritmik Filtreleme</div>', unsafe_allow_html=True)
 
-    with st.sidebar.expander("🤖 ALFA V1.1.3", expanded=is_v113_active):
-        st.radio("v113_opt", options=["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli"], key="radio_v113", on_change=create_nav_callback("radio_v113", map_v113), label_visibility="collapsed")
+with st.sidebar.expander("🤖 ALFA V1.1.3", expanded=is_v113_active):
+    st.radio("v113_opt", options=["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli"], key="radio_v113", on_change=create_nav_callback("radio_v113", map_v113), label_visibility="collapsed")
 
-    with st.sidebar.expander("🤖 ALFA V1.2.3", expanded=is_v123_active):
-        st.radio("v123_opt", options=["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli"], key="radio_v123", on_change=create_nav_callback("radio_v123", map_v123), label_visibility="collapsed")
+with st.sidebar.expander("🤖 ALFA V1.2.3", expanded=is_v123_active):
+    st.radio("v123_opt", options=["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli"], key="radio_v123", on_change=create_nav_callback("radio_v123", map_v123), label_visibility="collapsed")
 
-    with st.sidebar.expander("🤖 ALFA V1.4", expanded=is_v14_active):
-        st.radio("v14_opt", options=["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli"], key="radio_v14", on_change=create_nav_callback("radio_v14", map_v14), label_visibility="collapsed")
+with st.sidebar.expander("🤖 ALFA V1.4", expanded=is_v14_active):
+    st.radio("v14_opt", options=["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli"], key="radio_v14", on_change=create_nav_callback("radio_v14", map_v14), label_visibility="collapsed")
 
-    with st.sidebar.expander("🤖 ALFA V2.4", expanded=is_v24_active):
-        st.radio("v24_opt", options=["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli"], key="radio_v24", on_change=create_nav_callback("radio_v24", map_v24), label_visibility="collapsed")
+with st.sidebar.expander("🤖 ALFA V2.4", expanded=is_v24_active):
+    st.radio("v24_opt", options=["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli"], key="radio_v24", on_change=create_nav_callback("radio_v24", map_v24), label_visibility="collapsed")
 
-    with st.sidebar.expander("🤖 ALFA V3.4", expanded=is_v34_active):
-        st.radio("v34_opt", options=["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli"], key="radio_v34", on_change=create_nav_callback("radio_v34", map_v34), label_visibility="collapsed")
+with st.sidebar.expander("🤖 ALFA V3.4", expanded=is_v34_active):
+    st.radio("v34_opt", options=["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli"], key="radio_v34", on_change=create_nav_callback("radio_v34", map_v34), label_visibility="collapsed")
 
-    with st.sidebar.expander("🎯 Ortak Portföy", expanded=is_ortak_active):
-        st.radio("ortak_opt", options=["🎯 Ortak Portföy Tablosu"], key="radio_ortak", on_change=create_nav_callback("radio_ortak", map_ortak), label_visibility="collapsed")
+with st.sidebar.expander("🎯 Ortak Portföy", expanded=is_ortak_active):
+    st.radio("ortak_opt", options=["🎯 Ortak Portföy Tablosu"], key="radio_ortak", on_change=create_nav_callback("radio_ortak", map_ortak), label_visibility="collapsed")
 
-    with st.sidebar.expander("📈 Trend & MA İnceleme", expanded=is_ma_active):
-        st.radio("ma_opt", options=["📈 Hareketli Ortalama İnceleme"], key="radio_ma", on_change=create_nav_callback("radio_ma", map_ma), label_visibility="collapsed")
+with st.sidebar.expander("📈 Trend & MA İnceleme", expanded=is_ma_active):
+    st.radio("ma_opt", options=["📈 Hareketli Ortalama İnceleme"], key="radio_ma", on_change=create_nav_callback("radio_ma", map_ma), label_visibility="collapsed")
 
-    with st.sidebar.expander("📁 Veri Yönetimi", expanded=is_veri_active):
-        st.radio("veri_opt", options=["📁 Veri Yönetimi (Excel Yükle)"], key="radio_veri", on_change=create_nav_callback("radio_veri", map_veri), label_visibility="collapsed")
+with st.sidebar.expander("📁 Veri Yönetimi", expanded=is_veri_active):
+    st.radio("veri_opt", options=["📁 Veri Yönetimi (Excel Yükle)"], key="radio_veri", on_change=create_nav_callback("radio_veri", map_veri), label_visibility="collapsed")
 
-else:  # aktif_leg == "portfoy"
-    st.sidebar.markdown("#### 💼 Portföy Yönetimi")
-    st.sidebar.info("İskelet hazır. Alt başlıkları belirlediğinde buraya ekleyeceğiz.")
+# ── Bölüm 2: Portföy Yönetimi ──
+st.sidebar.markdown('<div class="alfa-section">💼 Portföy Yönetimi</div>', unsafe_allow_html=True)
+
+with st.sidebar.expander("💼 Portföy Yönetimi", expanded=is_portfoy_active):
+    st.radio("portfoy_opt", options=["🏠 Genel Bakış"], key="radio_portfoy", on_change=create_nav_callback("radio_portfoy", map_portfoy), label_visibility="collapsed")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("<div style='font-size: 12px; color: #6c757d;'><b>Sistem Bilgisi</b><br>• Sürüm: ALFA Multi-Core V2.4<br>• Veri Kaynağı: Fintables & yfinance<br>• Durum: Aktif</div>", unsafe_allow_html=True)
