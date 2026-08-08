@@ -18,50 +18,67 @@ TURKEY_TZ = ZoneInfo("Europe/Istanbul")
 DATA_CACHE_PATH = "alfa_data_cache.pkl"
 META_CACHE_PATH = "alfa_meta_cache.json"
 
-# --- ÖZGÜN CSS (Fintables tarzı profesyonel sidebar) ---
+# --- ÖZGÜN CSS (Fintables tarzı profesyonel accordion sidebar) ---
 st.markdown(
     """
     <style>
-    /* Sidebar genel */
-    section[data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid #eef0f3; }
-    section[data-testid="stSidebar"] > div { padding-top: 8px; }
+    /* ---- Sidebar genel ---- */
+    section[data-testid="stSidebar"] {
+        background-color: #ffffff;
+        border-right: 1px solid #eef0f3;
+    }
+    section[data-testid="stSidebar"] > div { padding-top: 6px; }
+    /* başlık */
+    section[data-testid="stSidebar"] h3 { font-size: 17px !important; margin-bottom: 2px; }
 
-    /* Bölüm başlığı etiketleri (küçük, silik, harf aralıklı) */
+    /* ---- Bölüm başlığı etiketleri ---- */
     .alfa-section {
-        font-size: 11px; font-weight: 700; letter-spacing: .06em;
-        text-transform: uppercase; color: #94a3b8;
-        margin: 14px 6px 6px 6px;
+        font-size: 11px; font-weight: 700; letter-spacing: .07em;
+        text-transform: uppercase; color: #9aa5b1;
+        margin: 16px 4px 4px 6px; user-select: none;
     }
 
-    /* Expander'ları düz nav satırına çevir (kart görünümünü kaldır) */
+    /* ---- Expander'ı düz, kompakt nav satırına çevir ---- */
     section[data-testid="stSidebar"] [data-testid="stExpander"] {
         border: none !important; box-shadow: none !important; background: transparent !important;
-        margin: 0 !important;
+        margin: 1px 0 !important;
     }
     section[data-testid="stSidebar"] [data-testid="stExpander"] > details {
         border: none !important; background: transparent !important;
     }
+    /* satır başlığı (summary) */
     section[data-testid="stSidebar"] [data-testid="stExpander"] > details > summary {
-        padding: 9px 12px !important; border-radius: 10px !important;
-        font-size: 14px !important; font-weight: 600 !important; color: #1f2d3d !important;
-        list-style: none !important; transition: background .15s ease; cursor: pointer;
+        padding: 8px 12px !important; border-radius: 10px !important;
+        font-size: 14px !important; font-weight: 600 !important; color: #334155 !important;
+        list-style: none !important; cursor: pointer;
+        transition: background .12s ease, color .12s ease;
     }
+    section[data-testid="stSidebar"] [data-testid="stExpander"] > details > summary::-webkit-details-marker { display:none; }
     section[data-testid="stSidebar"] [data-testid="stExpander"] > details > summary:hover {
-        background-color: #f1f5f9 !important;
+        background-color: #f4f6f9 !important; color: #0f172a !important;
     }
+    /* açık (aktif) satır: mavi vurgu + sol aksan */
     section[data-testid="stSidebar"] [data-testid="stExpander"] > details[open] > summary {
-        background-color: #eef4ff !important; color: #1d4ed8 !important;
+        background-color: #eff4ff !important; color: #1d4ed8 !important;
+        box-shadow: inset 3px 0 0 #1d4ed8;
     }
-    section[data-testid="stSidebar"] [data-testid="stExpander"] summary svg { color: #94a3b8; }
+    /* chevron rengi */
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary svg { color: #94a3b8; width: 1rem; height: 1rem; }
 
-    /* Alt seçenekler (Radar / Teşhis) — girintili, düz link hissi */
-    section[data-testid="stSidebar"] div[role="radiogroup"] { margin-left: 8px; border-left: 2px solid #eef0f3; padding-left: 6px; }
+    /* ---- Alt seçenekler (Radar / Teşhis) ---- */
+    section[data-testid="stSidebar"] div[role="radiogroup"] {
+        margin: 2px 0 4px 14px; padding-left: 8px; border-left: 2px solid #eef0f3; gap: 1px;
+    }
     section[data-testid="stSidebar"] div[role="radiogroup"] > label {
         cursor: pointer !important; padding: 6px 10px !important; border-radius: 8px !important;
-        font-size: 13px !important; color: #475569 !important; transition: all .15s ease;
+        font-size: 13px !important; color: #52617a !important; transition: all .12s ease;
     }
     section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
-        background-color: #f1f5f9 !important; color: #0f172a !important;
+        background-color: #f4f6f9 !important; color: #0f172a !important;
+    }
+    /* seçili alt öğe vurgusu */
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
+        background-color: #eff4ff !important; color: #1d4ed8 !important; font-weight: 600 !important;
     }
     </style>
     """,
