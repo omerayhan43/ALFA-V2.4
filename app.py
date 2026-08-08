@@ -413,6 +413,7 @@ elif current_page in ["v14_radar", "v14_diag"]:
         if current_page == "v14_radar":
             st.markdown("### 🤖 ALFA V1.4 - Radar & Taramalar")
             teknik_asanadan_gecenler = []
+            analiz_edilen = 0
             
             if len(df_temel) > 0:
                 with st.spinner("🔄 ALFA V1.4 için MA20, MA60, MA75, MA200 ve HHV252 verileri kontrol ediliyor..."):
@@ -421,17 +422,22 @@ elif current_page in ["v14_radar", "v14_diag"]:
                         try:
                             hist = yf.download(kod, period="1y", progress=False)
                             if not hist.empty:
+                                if isinstance(hist.columns, pd.MultiIndex):
+                                    hist.columns = hist.columns.get_level_values(0)
                                 hist = hist.sort_index().dropna()
                                 close = hist['Close']
                                 if isinstance(close, pd.DataFrame): close = close.iloc[:, 0]
                                 if len(close) >= 200:
+                                    analiz_edilen += 1
                                     c_val = float(close.iloc[-1])
                                     ma20 = float(close.rolling(20).mean().iloc[-1])
                                     ma60 = float(close.rolling(60).mean().iloc[-1])
                                     ma75 = float(close.rolling(75).mean().iloc[-1])
                                     ma200 = float(close.rolling(200).mean().iloc[-1])
                                     
-                                    hi_252 = hist['High'].tail(252) if len(hist) >= 252 else hist['High']
+                                    high_s = hist['High']
+                                    if isinstance(high_s, pd.DataFrame): high_s = high_s.iloc[:, 0]
+                                    hi_252 = high_s.tail(252) if len(high_s) >= 252 else high_s
                                     hhv_limit = float(hi_252.max()) * 0.77
 
                                     df_temel.loc[idx, 'Kapanis_Anlik'] = round(c_val, 2)
@@ -453,6 +459,9 @@ elif current_page in ["v14_radar", "v14_diag"]:
             m1.metric(label="📊 Toplam İncelenen", value=f"{len(df)} Hisse")
             m2.metric(label="🏛️ Temel Filtreyi Geçen", value=f"{len(df_temel)} Hisse")
             m3.metric(label="🏆 Teknik & Trendi Geçen (Adaylar)", value=f"{len(df_teknik)} Hisse")
+            if len(df_temel) > 0:
+                st.caption(f"ℹ️ Temeli geçen {len(df_temel)} adaydan **{analiz_edilen}** tanesi için ≥200 günlük fiyat verisi çekilebildi (teknik değerlendirmeye giren). "
+                           f"{'Hepsi çekildi.' if analiz_edilen == len(df_temel) else 'Çekilemeyen adaylar yfinance verisi/geçmişi eksik olabilir.'}")
             st.markdown("---")
 
             if len(df_temel) > 0:
