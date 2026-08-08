@@ -143,6 +143,189 @@ def dg(x):
         return f"{xf/1e6:.2f}Mn"
     return f"{xf:.2f}"
 
+
+# ============================================================================
+# ORTAK PORTFÖY (KONSENSÜS) — 5 algoritmayı arka planda çalıştıran yardımcılar
+# ============================================================================
+def _pdddlimit(df):
+    return np.where(df["ROE_0"] > 90, 8 + (df["ROE_0"] - 90) * 0.07, 8)
+
+def _temel_v14(df):
+    pl = _pdddlimit(df)
+    a = df["ROE_0"] > tufe_12
+    b = df["NetBorc_FAVOK"] < 4
+    d = df["PDDD"] < pl
+    ee = df["Getiri_2h"] > (oto_xutum_2h - 10)
+    f = df["NetSatisBuyume"] > 0
+    gx = (df["FAVOKBuyume"] > tufe_12) | ((df["FAVOK_0"] > df["ef_FAVOK_1"]) & (df["FAVOK_0"] > df["ef_FAVOK_4"]))
+    hx = ((df["BrutEFKBuyume"] > tufe_12) | ((df["BrutEFK_0"] > df["ef_BrutEFK_1"]) & (df["BrutEFK_0"] > df["ef_BrutEFK_4"]))) & \
+         ((df["EFKBuyume"] > tufe_12) | ((df["EFK_0"] > df["ef_EFK_1"]) & (df["EFK_0"] > df["ef_EFK_4"])))
+    h = df["Getiri_2a"] > oto_xutum_2a
+    j = df["Getiri_1a"] > -15
+    efkTeyit = (df["EFK_0"] >= df["ef_EFK_1"]) | (df["EFK_0"] >= df["ef_EFK_4"])
+    roeTeyit = (df["ROE_0"] >= df["ef_ROE_1"]) | (df["ROE_0"] >= df["ef_ROE_4"])
+    k = df["HAOran"] < 60
+    return a & b & d & ee & f & (hx | gx | efkTeyit) & h & j & roeTeyit & k
+
+def _temel_v24(df):
+    pl = _pdddlimit(df)
+    a = df["Getiri_2a"] > oto_2a
+    b = df["ROE_0"] > tufe_12
+    c = df["NetBorc_FAVOK"] < 4
+    d = df["PDDD"] < pl
+    ee = df["Getiri_2h"] > (oto_2h - 10)
+    f = df["NetSatisBuyume"] > 0
+    g = df["FAVOKBuyume"] > tufe_12
+    h = (df["BrutEFKBuyume"] > tufe_12) & (df["EFKBuyume"] > tufe_12)
+    gx = df["FAVOK_0"] > df["ef_FAVOK_1"]
+    hx = (df["BrutEFK_0"] > df["ef_BrutEFK_1"]) & (df["EFK_0"] > df["ef_EFK_1"])
+    j = df["Getiri_1a"] > -15
+    efkTeyit = (df["EFK_0"] >= df["ef_EFK_1"]) | (df["EFK_0"] >= df["ef_EFK_4"])
+    roeTeyit = (df["ROE_0"] >= df["ef_ROE_1"]) | (df["ROE_0"] >= df["ef_ROE_4"])
+    k = df["HAOran"] < 60
+    return a & b & c & d & ee & f & ((h | g) | (hx | gx) | efkTeyit) & j & roeTeyit & k
+
+def _temel_v34(df):
+    pl = _pdddlimit(df)
+    a = df["Getiri_2a"] > oto_2a
+    b = df["ROE_0"] > tufe_12
+    c = df["NetBorc_FAVOK"] < 4
+    d = df["PDDD"] < pl
+    e = df["Getiri_2h"] > (oto_2h - 10)
+    f = df["Getiri_1a"] > -15
+    ns = df["NetSatisBuyume"] > 0
+    gx = (df["FAVOKBuyume"] > tufe_12) | (df["FAVOK_0"] > df["ef_FAVOK_1"])
+    hx = ((df["BrutEFKBuyume"] > tufe_12) | (df["BrutEFK_0"] > df["ef_BrutEFK_1"])) & \
+         ((df["EFKBuyume"] > tufe_12) | (df["EFK_0"] > df["ef_EFK_1"]))
+    efkTeyit = (df["EFK_0"] >= df["ef_EFK_1"]) | (df["EFK_0"] >= df["ef_EFK_4"])
+    roeTeyit = (df["ROE_0"] >= df["ef_ROE_1"]) | (df["ROE_0"] >= df["ef_ROE_4"])
+    k = df["HAOran"] < 60
+    return a & b & c & d & e & f & ns & (hx | gx | efkTeyit) & roeTeyit & k
+
+def _temel_v113(df):
+    pl = _pdddlimit(df)
+    a = df["Getiri_2a"] > oto_2a
+    b = df["ROE_0"] > tufe_12
+    c = df["NetBorc_FAVOK"] < 4
+    d = df["PDDD"] < pl
+    e = df["Getiri_2h"] > (oto_2h - 10)
+    f = df["NetSatisBuyume"] > 0
+    g = df["FAVOKBuyume"] > tufe_12
+    h = (df["BrutEFKBuyume"] > tufe_12) & (df["EFKBuyume"] > tufe_12)
+    j = df["Getiri_1a"] > -15
+    k = df["HAOran"] < 60
+    return a & b & c & d & e & f & (h | g) & j & k
+
+def _temel_v123(df):
+    pl = _pdddlimit(df)
+    a = df["Getiri_2a"] > oto_2a
+    b = df["ROE_0"] > tufe_12
+    c = df["NetBorc_FAVOK"] < 4
+    d = df["PDDD"] < pl
+    e = df["Getiri_2h"] > (oto_2h - 10)
+    f = df["Getiri_1a"] > -15
+    return a & b & c & d & e & f
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def _fetch_prices(kodlar):
+    """Verilen hisseler için 1y fiyattan MA20/60/75/200 + HHV252*0.77 + canlı kapanış hesaplar (tekil)."""
+    cache = {}
+    for kod in kodlar:
+        try:
+            hist = yf.download(kod + ".IS", period="1y", progress=False)
+            if hist.empty:
+                continue
+            if isinstance(hist.columns, pd.MultiIndex):
+                hist.columns = hist.columns.get_level_values(0)
+            hist = hist.sort_index().dropna()
+            close = hist['Close']
+            if isinstance(close, pd.DataFrame): close = close.iloc[:, 0]
+            if len(close) < 200:
+                continue
+            high = hist['High']
+            if isinstance(high, pd.DataFrame): high = high.iloc[:, 0]
+            cache[kod] = {
+                'c': float(close.iloc[-1]),
+                'ma20': float(close.rolling(20).mean().iloc[-1]),
+                'ma60': float(close.rolling(60).mean().iloc[-1]),
+                'ma75': float(close.rolling(75).mean().iloc[-1]),
+                'ma200': float(close.rolling(200).mean().iloc[-1]),
+                'hhv': float((high.tail(252) if len(high) >= 252 else high).max()) * 0.77,
+            }
+        except Exception:
+            continue
+    return cache
+
+def _skor_std(r, ma75, penalties):
+    """V2.4/V1.1.3 (penalties=True) ve V3.4/V1.2.3 (penalties=False) ortak skoru. Trend fintables Kapanış'ı kullanır."""
+    roe = r['ROE_0']; m6 = r['Getiri_6a']; m2 = r['Getiri_2a']; m1 = r['Getiri_1a']
+    c = r['Kapanis']; eb = r['EFKBuyume']; fb = r['FAVOKBuyume']; sb = r['NetSatisBuyume']; pddd = r['PDDD']
+    roeSkor = 100 if roe > 50 else roe * 2
+    momS = 100 if m6 > 100 else m6
+    m2S = 100 if m2 > 50 else m2 * 2
+    trendY = ((c - ma75) / ma75) * 100 if ma75 else 0
+    trendS = 30 if trendY > 30 else (0 if trendY < 0 else trendY)
+    pdddS = 25 if pddd < 1.5 else (15 if pddd < 3 else (5 if pddd < 5 else (-10 if pddd > 6 else 0)))
+    ebS = 100 if eb > 50 else (eb * 2 if eb > 0 else 0)
+    fbS = 100 if fb > 50 else (fb * 2 if fb > 0 else 0)
+    sbS = 100 if sb > 50 else (sb * 2 if sb > 0 else 0)
+    buyS = (ebS + fbS + sbS) / 3
+    base = roeSkor * 0.30 + buyS * 0.20 + momS * 0.15 + m2S * 0.05 + trendS * 0.18 + pdddS * 0.12
+    if penalties:
+        negCeza = -15 if m1 < -10 else (-8 if m1 < -5 else 0)
+        ardisik = -10 if (m1 < 0 and m2 < 0) else 0
+        base += negCeza + ardisik
+    return base
+
+def _skor_v14(r, p):
+    """V1.4 skoru: trend/maUzaklık canlı kapanışı kullanır; ivmeBonus/favokIvme/buyumeBonus dahil."""
+    roe = r['ROE_0']; m6 = r['Getiri_6a']; m2 = r['Getiri_2a']
+    c = p['c']; ma75 = p['ma75']; ma200 = p['ma200']
+    eb = r['EFKBuyume']; fb = r['FAVOKBuyume']; sb = r['NetSatisBuyume']; beb = r['BrutEFKBuyume']; pddd = r['PDDD']
+    ef_eb1 = r['ef_EFKBuyume_1']; ef_fb1 = r['ef_FAVOKBuyume_1']
+    roeSkor = 100 if roe > 50 else roe * 2
+    momS = 100 if m6 > 100 else m6
+    m2S = 100 if m2 > 50 else m2 * 2
+    trendY = ((c - ma75) / ma75) * 100 if ma75 else 0
+    trendS = 30 if trendY > 30 else (0 if trendY < 0 else trendY)
+    ebS = 100 if eb > 50 else (eb * 2 if eb > 0 else 0)
+    fbS = 100 if fb > 50 else (fb * 2 if fb > 0 else 0)
+    sbS = 100 if sb > 50 else (sb * 2 if sb > 0 else 0)
+    buyS = (ebS + fbS + sbS) / 3
+    ivme = 15 if (eb > ef_eb1 and eb > 0) else (5 if eb > ef_eb1 else 0)
+    favokIvme = 10 if (fb > ef_fb1 and fb > 0) else 0
+    maU = ((c - ma200) / ma200) * 100 if ma200 else 0
+    maUceza = -15 if maU > 80 else (-8 if maU > 60 else 0)
+    pdddS = 25 if pddd < 1.5 else (15 if pddd < 3 else (5 if pddd < 5 else (-10 if pddd > 6 else 0)))
+    buyumeBonus = 15 if (sb > 0 and ((beb > tufe_12 and eb > tufe_12) or fb > tufe_12)) else \
+                  (0 if (sb > 0 or beb > tufe_12 or eb > tufe_12 or fb > tufe_12) else -10)
+    return roeSkor * 0.30 + buyS * 0.20 + momS * 0.15 + trendS * 0.18 + m2S * 0.05 + pdddS * 0.12 + \
+           ivme * 0.90 + favokIvme + maUceza + buyumeBonus
+
+# (ad, temel_fonksiyonu, teknik_kontrolü, skor_fonksiyonu) — öncelik/getiri sırasına göre
+_ALGO_DEFS = [
+    ("V1.4",   _temel_v14,  lambda r, p: p['c'] > p['ma200'] and p['c'] > p['ma75'] and p['ma20'] > p['ma60'] and p['c'] > p['hhv'], lambda r, p: _skor_v14(r, p)),
+    ("V2.4",   _temel_v24,  lambda r, p: p['ma75'] > p['ma200'] and p['ma20'] > p['ma75'],                                          lambda r, p: _skor_std(r, p['ma75'], True)),
+    ("V3.4",   _temel_v34,  lambda r, p: p['ma20'] > p['ma60'] and p['ma75'] > p['ma200'] and p['c'] > p['ma75'],                   lambda r, p: _skor_std(r, p['ma75'], False)),
+    ("V1.1.3", _temel_v113, lambda r, p: p['ma75'] > p['ma200'],                                                                    lambda r, p: _skor_std(r, p['ma75'], True)),
+    ("V1.2.3", _temel_v123, lambda r, p: p['ma20'] > p['ma60'] and p['ma75'] > p['ma200'],                                          lambda r, p: _skor_std(r, p['ma75'], False)),
+]
+
+def _sirali(df, mask, px, tek_fn, skor_fn):
+    """Temel+teknik geçen hisseleri skora göre sıralar; DataFrame(Kod, SKOR, rank) döndürür."""
+    sub = df[mask]
+    rows = []
+    for _, r in sub.iterrows():
+        p = px.get(r['Kod'])
+        if p is None:
+            continue
+        if not tek_fn(r, p):
+            continue
+        rows.append((r['Kod'], float(skor_fn(r, p))))
+    res = pd.DataFrame(rows, columns=['Kod', 'SKOR']).sort_values('SKOR', ascending=False).reset_index(drop=True)
+    res['rank'] = res.index + 1
+    return res
+
 # --- SESSION STATE & F5 VERİ KALICILIĞI YÖNETİMİ ---
 if "df_merged" not in st.session_state: st.session_state.df_merged = None
 if "upload_time" not in st.session_state: st.session_state.upload_time = None
@@ -154,6 +337,7 @@ if "nav_page" not in st.session_state:
     st.session_state.radio_v24 = "📊 Radar & Taramalar"
     st.session_state.radio_v34 = None
     st.session_state.radio_v123 = None
+    st.session_state.radio_ortak = None
     st.session_state.radio_ma = None
     st.session_state.radio_veri = None
 
@@ -169,7 +353,7 @@ if st.session_state.df_merged is None:
             pass
 
 # --- NAVİGASYON CALLBACK SİSTEMİ ---
-RADIO_KEYS = ["radio_v113", "radio_v14", "radio_v24", "radio_v34", "radio_v123", "radio_ma", "radio_veri"]
+RADIO_KEYS = ["radio_v113", "radio_v14", "radio_v24", "radio_v34", "radio_v123", "radio_ortak", "radio_ma", "radio_veri"]
 
 def create_nav_callback(key, mapping):
     def callback():
@@ -186,6 +370,7 @@ map_v14 = {"📊 Radar & Taramalar": "v14_radar", "🔍 Hisse Teşhis Paneli": "
 map_v24 = {"📊 Radar & Taramalar": "v24_radar", "🔍 Hisse Teşhis Paneli": "v24_diag"}
 map_v34 = {"📊 Radar & Taramalar": "v34_radar", "🔍 Hisse Teşhis Paneli": "v34_diag"}
 map_v123 = {"📊 Radar & Taramalar": "v123_radar", "🔍 Hisse Teşhis Paneli": "v123_diag"}
+map_ortak = {"🎯 Ortak Portföy Tablosu": "ortak_portfoy"}
 map_ma = {"📈 Hareketli Ortalama İnceleme": "ma_review"}
 map_veri = {"📁 Veri Yönetimi (Excel Yükle)": "data_mgmt"}
 
@@ -226,6 +411,7 @@ is_v14_active = current_page in ["v14_radar", "v14_diag"]
 is_v24_active = current_page in ["v24_radar", "v24_diag"]
 is_v34_active = current_page in ["v34_radar", "v34_diag"]
 is_v123_active = current_page in ["v123_radar", "v123_diag"]
+is_ortak_active = current_page == "ortak_portfoy"
 is_ma_active = current_page == "ma_review"
 is_veri_active = current_page == "data_mgmt"
 
@@ -243,6 +429,9 @@ with st.sidebar.expander("🤖 ALFA V2.4", expanded=is_v24_active):
 
 with st.sidebar.expander("🤖 ALFA V3.4", expanded=is_v34_active):
     st.radio("v34_opt", options=["📊 Radar & Taramalar", "🔍 Hisse Teşhis Paneli"], key="radio_v34", on_change=create_nav_callback("radio_v34", map_v34), label_visibility="collapsed")
+
+with st.sidebar.expander("🎯 Ortak Portföy", expanded=is_ortak_active):
+    st.radio("ortak_opt", options=["🎯 Ortak Portföy Tablosu"], key="radio_ortak", on_change=create_nav_callback("radio_ortak", map_ortak), label_visibility="collapsed")
 
 with st.sidebar.expander("📈 Trend & MA İnceleme", expanded=is_ma_active):
     st.radio("ma_opt", options=["📈 Hareketli Ortalama İnceleme"], key="radio_ma", on_change=create_nav_callback("radio_ma", map_ma), label_visibility="collapsed")
@@ -318,6 +507,136 @@ if current_page == "data_mgmt":
             st.success(f"📌 Sistemde en son yüklenen veri aktif (Yükleme Zamanı: {st.session_state.upload_time}). Yeni dosya yüklemedikçe bu veri korunacaktır.")
         else:
             st.info("👈 Lütfen her iki Excel dosyasını da yükleyin.")
+
+# --- 🎯 ORTAK PORTFÖY (KONSENSÜS) ---
+elif current_page == "ortak_portfoy":
+    st.markdown("### 🎯 Ortak Portföy (Konsensüs Tablosu)")
+    if st.session_state.df_merged is None:
+        st.info("👈 Önce 'Veri Yönetimi' sekmesinden Excel dosyalarını yükleyin.")
+    else:
+        df = st.session_state.df_merged.copy()
+        priority = ["V1.4", "V2.4", "V3.4", "V1.1.3", "V1.2.3"]
+
+        # 1) Her algoritmanın temelden geçenleri (yfinance'siz)
+        masks = {ad: temel_fn(df) for ad, temel_fn, _, _ in _ALGO_DEFS}
+        union_kods = sorted(set().union(*[set(df.loc[m, "Kod"]) for m in masks.values()]))
+
+        if len(union_kods) == 0:
+            st.warning("Hiçbir algoritma temel filtresinden hisse geçmedi.")
+        else:
+            with st.spinner(f"🔄 5 algoritma çalıştırılıyor · {len(union_kods)} hisse için fiyat verisi çekiliyor..."):
+                px = _fetch_prices(tuple(union_kods))
+                ranked = {}
+                for ad, temel_fn, tek_fn, skor_fn in _ALGO_DEFS:
+                    ranked[ad] = _sirali(df, masks[ad], px, tek_fn, skor_fn)
+
+            # Yardımcı yapılar
+            top5 = {ad: list(ranked[ad]["Kod"].head(5)) for ad in priority}
+            top5set = {ad: set(top5[ad]) for ad in priority}
+            fullset = {ad: set(ranked[ad]["Kod"]) for ad in priority}
+            skormap = {ad: dict(zip(ranked[ad]["Kod"], ranked[ad]["SKOR"])) for ad in priority}
+
+            def yildiz(k):
+                return sum(1 for ad in priority if k in top5set[ad])
+
+            def skor_ve_kaynak(k):
+                for ad in priority:  # en yüksek öncelikli algoritmanın skoru
+                    if k in skormap[ad]:
+                        return skormap[ad][k], ad
+                return None, None
+
+            # 2) YEŞİL PORTFÖY KURULUŞU
+            green = []
+            def ekle(k):
+                if k not in green:
+                    green.append(k)
+
+            # A) 5 algoritmada da ilk-5 ortak → skora göre
+            all5 = list(set.intersection(*[top5set[ad] for ad in priority])) if all(len(top5set[ad]) > 0 for ad in priority) else []
+            all5.sort(key=lambda k: skor_ve_kaynak(k)[0] or -1e18, reverse=True)
+            for k in all5:
+                ekle(k)
+            # B) V1.4 ilk-5 (sıra), C) V2.4 ilk-5, D) V3.4 ilk-5  → çekirdek
+            for ad in ["V1.4", "V2.4", "V3.4"]:
+                for k in top5[ad]:
+                    ekle(k)
+            core_count = len(green)
+            # Çekirdek 5'ten azsa yedeklerle (V1.1.3, V1.2.3) 5'e tamamla; 5+ ise dokunma
+            if core_count < 5:
+                for ad in ["V1.1.3", "V1.2.3"]:
+                    for k in top5[ad]:
+                        if len(green) >= 5:
+                            break
+                        ekle(k)
+                    if len(green) >= 5:
+                        break
+                green = green[:5]
+            green_set = set(green)
+
+            # 3) Tablo satır sırası: yeşiller (seçim sırası) + griler (yıldız, öncelik ağırlığı, sonra skor)
+            W = {ad: (len(priority) - i) for i, ad in enumerate(priority)}  # V1.4=5 ... V1.2.3=1
+            def oncelik_agirligi(k):
+                return sum(W[ad] for ad in priority if k in top5set[ad])
+            all_stocks = set().union(*[fullset[ad] for ad in priority])
+            gray = [k for k in all_stocks if k not in green_set]
+            gray.sort(key=lambda k: (yildiz(k), oncelik_agirligi(k), skor_ve_kaynak(k)[0] or -1e18), reverse=True)
+            ordered = green + gray
+
+            # 4) Görüntü tablosu
+            satirlar = []
+            for i, k in enumerate(ordered):
+                sc, _ = skor_ve_kaynak(k)
+                satir = {
+                    "#": (i + 1) if k in green_set else "",
+                    "Hisse": k,
+                    "Skor": round(sc, 1) if sc is not None else None,
+                    "⭐": "⭐" * yildiz(k),
+                }
+                for ad in priority:
+                    if k in top5set[ad]:
+                        satir[ad] = "✔"       # ilk 5
+                    elif k in fullset[ad]:
+                        satir[ad] = "✓"       # geçti ama gri (>5)
+                    else:
+                        satir[ad] = "✕"       # geçmedi
+                satirlar.append(satir)
+            disp = pd.DataFrame(satirlar, columns=["#", "Hisse", "Skor", "⭐"] + priority)
+
+            # 5) Stil: yeşil satır canlı; matris hücreleri soluk
+            def _stil(dfd):
+                s = pd.DataFrame("", index=dfd.index, columns=dfd.columns)
+                for ridx, k in enumerate(ordered):
+                    yesil = k in green_set
+                    satir_css = "background-color:#7ed9a6; font-weight:bold; color:#0b3d24;" if yesil \
+                                else "background-color:#f2f3f4; color:#95a5a6;"
+                    for col in ["#", "Hisse", "Skor", "⭐"]:
+                        s.loc[ridx, col] = satir_css
+                    for ad in priority:
+                        if k in top5set[ad]:
+                            s.loc[ridx, ad] = "background-color:#d4efdf; color:#27ae60;"   # soluk yeşil (ilk 5)
+                        elif k in fullset[ad]:
+                            s.loc[ridx, ad] = "background-color:#f4fbf7; color:#b7dfc7;"   # daha silik yeşil (gri geçen)
+                        else:
+                            s.loc[ridx, ad] = "background-color:#fdf2f1; color:#eab8b2;"   # soluk kırmızı (geçmedi)
+                return s
+
+            # Özet
+            yildizli5 = [k for k in green if yildiz(k) == 5]
+            c1, c2, c3 = st.columns(3)
+            c1.metric("🟢 Portföy (yeşil)", f"{len(green)} hisse")
+            c2.metric("⭐ 5 algoritmada ortak", f"{len(all5)} hisse")
+            c3.metric("📋 Tablodaki toplam", f"{len(ordered)} hisse")
+            if core_count >= 5:
+                st.caption(f"ℹ️ Çekirdek (V1.4+V2.4+V3.4) {core_count} hisse verdi (≥5) → ıraksama senaryosu: üst sınır yok, hepsi yeşil.")
+            else:
+                st.caption(f"ℹ️ Çekirdek (V1.4+V2.4+V3.4) {core_count} hisse → yedeklerle (V1.1.3, V1.2.3) 5'e tamamlandı.")
+
+            st.dataframe(
+                disp.style.apply(_stil, axis=None).format({"Skor": "{:.1f}"}, na_rep="-"),
+                use_container_width=True, hide_index=True
+            )
+            st.caption("✔ = o algoritmanın ilk 5'inde · ✓ = geçti ama sırası >5 (gri) · ✕ = geçmedi. "
+                       "Sütun sırası getiri önceliğine göre: V1.4 > V2.4 > V3.4 > V1.1.3 > V1.2.3.")
 
 # --- HAREKETLİ ORTALAMA İNCELEME PANELİ ---
 elif current_page == "ma_review":
@@ -537,13 +856,13 @@ elif current_page in ["v113_radar", "v113_diag"]:
                         ("1A Getiri > -15", c_j, f"%{th['Getiri_1a']:.2f}"),
                         ("Halka Açıklık < 60", c_k, f"{dg(th['HAOran'])}"),
                     ]
-                    takilan = [f"{l} → ({v})" for l, ok, v in krit if not ok]
+                    takilan = [l for l, ok, v in krit if not ok]
 
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"#### 🏛️ ALFA V1.1.3 Temel Analiz ({secilen_hisse})")
                         for l, ok, v in krit:
-                            st.write(f"- {l}: {'✅ Geçti' if ok else '❌ Kaldı'} ({v})")
+                            st.write(f"- {l}: {'✅ Geçti' if ok else '❌ Kaldı'}")
 
                     with col2:
                         st.markdown(f"#### 📈 ALFA V1.1.3 Teknik Şartlar")
@@ -560,7 +879,7 @@ elif current_page in ["v113_radar", "v113_diag"]:
                                     t1 = m75 > m200
                                     st.write(f"- **MA75 > MA200:** {'✅' if t1 else '❌'} ({m75:.2f} > {m200:.2f})")
                                     if not t1:
-                                        takilan.append(f"Teknik: MA75>MA200 sağlanmadı ({m75:.2f} ≤ {m200:.2f})")
+                                        takilan.append("ALFA V1.1.3 Teknik Şartı (MA75 > MA200)")
                         except Exception as ex: st.error(f"Teknik hata: {ex}")
 
                     if takilan:
@@ -772,13 +1091,13 @@ elif current_page in ["v14_radar", "v14_diag"]:
                         ("ROE Teyit", c_roe_t, f"ROE %{th['ROE_0']:.2f} vs efROE-1 %{th['ef_ROE_1']:.2f} / efROE-4 %{th['ef_ROE_4']:.2f}"),
                         ("Halka Açıklık < 60", c_k, f"{dg(th['HAOran'])}"),
                     ]
-                    takilan = [f"{l} → ({v})" for l, ok, v in krit if not ok]
+                    takilan = [l for l, ok, v in krit if not ok]
 
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"#### 🏛️ ALFA V1.4 Temel Analiz ({secilen_hisse})")
                         for l, ok, v in krit:
-                            st.write(f"- {l}: {'✅ Geçti' if ok else '❌ Kaldı'} ({v})")
+                            st.write(f"- {l}: {'✅ Geçti' if ok else '❌ Kaldı'}")
 
                     with col2:
                         st.markdown(f"#### 📈 ALFA V1.4 Teknik Şartlar")
@@ -809,12 +1128,7 @@ elif current_page in ["v14_radar", "v14_diag"]:
                                     st.write(f"- **Fiyat > HHV(252)*0.77:** {'✅' if t4 else '❌'} ({c_val:.2f} > {hhv_limit:.2f})")
                                     
                                     if not (t1 and t2 and t3 and t4):
-                                        _tf = []
-                                        if not t1: _tf.append(f"C>MA200 ({c_val:.2f}≤{m200:.2f})")
-                                        if not t2: _tf.append(f"C>MA75 ({c_val:.2f}≤{m75:.2f})")
-                                        if not t3: _tf.append(f"MA20>MA60 ({m20:.2f}≤{m60:.2f})")
-                                        if not t4: _tf.append(f"C>HHV*0.77 ({c_val:.2f}≤{hhv_limit:.2f})")
-                                        takilan.append("Teknik → " + "; ".join(_tf))
+                                        takilan.append("ALFA V1.4 Teknik Şartı (C>MA200, C>MA75, MA20>MA60, C>HHV*0.77)")
                         except Exception as e: st.error(f"Teknik hata: {e}")
 
                     if takilan:
@@ -965,13 +1279,13 @@ elif current_page in ["v24_radar", "v24_diag"]:
                         ("1A Getiri > -15", c_j, f"%{th['Getiri_1a']:.2f}"),
                         ("Halka Açıklık < 60", c_k, f"{dg(th['HAOran'])}"),
                     ]
-                    takilan = [f"{l} → ({v})" for l, ok, v in krit if not ok]
+                    takilan = [l for l, ok, v in krit if not ok]
 
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"#### 🏛️ Temel Analiz ({secilen_hisse})")
                         for l, ok, v in krit:
-                            st.write(f"- {l}: {'✅ Geçti' if ok else '❌ Kaldı'} ({v})")
+                            st.write(f"- {l}: {'✅ Geçti' if ok else '❌ Kaldı'}")
 
                     with col2:
                         st.markdown(f"#### 📈 Teknik Detaylar")
@@ -987,11 +1301,7 @@ elif current_page in ["v24_radar", "v24_diag"]:
                                     m75 = float(cls.rolling(75).mean().iloc[-1])
                                     m200 = float(cls.rolling(200).mean().iloc[-1])
                                     teknik_gecti = bool((m75 > m200) and (m20 > m75))
-                                    if not teknik_gecti:
-                                        _tf = []
-                                        if not (m75 > m200): _tf.append(f"MA75>MA200 ({m75:.2f}≤{m200:.2f})")
-                                        if not (m20 > m75): _tf.append(f"MA20>MA75 ({m20:.2f}≤{m75:.2f})")
-                                        takilan.append("Teknik → " + "; ".join(_tf))
+                                    if not teknik_gecti: takilan.append("Teknik MA Kuralı (MA75 > MA200 ve MA20 > MA75)")
 
                                     st.write(f"- **Kapanış:** {float(th['Kapanis']):.2f}")
                                     st.write(f"- **MA20:** {m20:.2f}")
@@ -1164,13 +1474,13 @@ elif current_page in ["v34_radar", "v34_diag"]:
                         ("ROE Teyit", c_roe_t, f"ROE %{th['ROE_0']:.2f} vs efROE-1 %{th['ef_ROE_1']:.2f} / efROE-4 %{th['ef_ROE_4']:.2f}"),
                         ("Halka Açıklık < 60", c_k, f"{dg(th['HAOran'])}"),
                     ]
-                    takilan = [f"{l} → ({v})" for l, ok, v in krit if not ok]
+                    takilan = [l for l, ok, v in krit if not ok]
 
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"#### 🏛️ ALFA V3.4 Temel Analiz ({secilen_hisse})")
                         for l, ok, v in krit:
-                            st.write(f"- {l}: {'✅ Geçti' if ok else '❌ Kaldı'} ({v})")
+                            st.write(f"- {l}: {'✅ Geçti' if ok else '❌ Kaldı'}")
 
                     with col2:
                         st.markdown(f"#### 📈 ALFA V3.4 Teknik Şartlar")
@@ -1197,11 +1507,7 @@ elif current_page in ["v34_radar", "v34_diag"]:
                                     st.write(f"- **Kapanış > MA75:** {'✅' if t3 else '❌'} ({c_val:.2f} > {m75:.2f})")
 
                                     if not (t1 and t2 and t3):
-                                        _tf = []
-                                        if not t1: _tf.append(f"MA20>MA60 ({m20:.2f}≤{m60:.2f})")
-                                        if not t2: _tf.append(f"MA75>MA200 ({m75:.2f}≤{m200:.2f})")
-                                        if not t3: _tf.append(f"C>MA75 ({c_val:.2f}≤{m75:.2f})")
-                                        takilan.append("Teknik → " + "; ".join(_tf))
+                                        takilan.append("ALFA V3.4 Teknik Şartı (MA20>MA60, MA75>MA200, C>MA75)")
                         except Exception as ex: st.error(f"Teknik hata: {ex}")
 
                     if takilan:
@@ -1354,13 +1660,13 @@ elif current_page in ["v123_radar", "v123_diag"]:
                         ("2H Getiri Şartı", c_e, f"%{th['Getiri_2h']:.2f} vs eşik %{(oto_2h - 10):.2f}"),
                         ("1A Getiri > -15", c_f, f"%{th['Getiri_1a']:.2f}"),
                     ]
-                    takilan = [f"{l} → ({v})" for l, ok, v in krit if not ok]
+                    takilan = [l for l, ok, v in krit if not ok]
 
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"#### 🏛️ ALFA V1.2.3 Temel Analiz ({secilen_hisse})")
                         for l, ok, v in krit:
-                            st.write(f"- {l}: {'✅ Geçti' if ok else '❌ Kaldı'} ({v})")
+                            st.write(f"- {l}: {'✅ Geçti' if ok else '❌ Kaldı'}")
                         st.caption("ℹ️ V1.2.3'te büyüme (NetSatış/FAVÖK/EFK) ve halka açıklık (HAOran) temel filtrede yer almaz; büyüme yalnızca skorlamada kullanılır.")
 
                     with col2:
@@ -1382,10 +1688,7 @@ elif current_page in ["v123_radar", "v123_diag"]:
                                     st.write(f"- **MA20 > MA60:** {'✅' if t1 else '❌'} ({m20:.2f} > {m60:.2f})")
                                     st.write(f"- **MA75 > MA200:** {'✅' if t2 else '❌'} ({m75:.2f} > {m200:.2f})")
                                     if not (t1 and t2):
-                                        _tf = []
-                                        if not t1: _tf.append(f"MA20>MA60 ({m20:.2f}≤{m60:.2f})")
-                                        if not t2: _tf.append(f"MA75>MA200 ({m75:.2f}≤{m200:.2f})")
-                                        takilan.append("Teknik → " + "; ".join(_tf))
+                                        takilan.append("ALFA V1.2.3 Teknik Şartı (MA20>MA60, MA75>MA200)")
                         except Exception as ex: st.error(f"Teknik hata: {ex}")
 
                     if takilan:
