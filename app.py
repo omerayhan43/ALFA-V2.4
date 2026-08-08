@@ -39,33 +39,95 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- 1. OTOMATİK XU100 ENDEKS & MAKRO GİRDİLERİ (ARKA PLAN) ---
-@st.cache_data(ttl=3600)
-def otomatik_makro_veriler():
-    try:
-        df = yf.download("XU100.IS", period="3mo", progress=False)
-        if df.empty: return 31.75, -1.98, 0.76 
-        
-        df.index = pd.to_datetime(df.index)
-        bugun = pd.Timestamp.now(tz=TURKEY_TZ).tz_localize(None)
-        day_t = df.index.asof(bugun)
-        day_t2w = df.index.asof(bugun - pd.Timedelta(days=14))
-        day_t2m = df.index.asof(bugun - pd.Timedelta(days=60))
-        
-        get_price = lambda d: float(df.loc[d]['Close'].iloc[0] if isinstance(df.loc[d]['Close'], pd.Series) else df.loc[d]['Close'])
-        
-        price_today = get_price(day_t)
-        price_t2w = get_price(day_t2w)
-        price_t2m = get_price(day_t2m)
-        
-        xu100_2h = ((price_today - price_t2w) / price_t2w) * 100
-        xu100_2a = ((price_today - price_t2m) / price_t2m) * 100
-        
-        return 31.75, float(xu100_2h), float(xu100_2a)
-    except:
-        return 31.75, -1.98, 0.76
+# --- 1. OTOMATİK ENDEKS & MAKRO GİRDİLERİ (ARKA PLAN) ---
+# TÜFE(12): yfinance'ta yer almadığı için manuel sabit (her ay güncellenmeli)
+TUFE_12 = 31.75
 
-tufe_12, oto_2h, oto_2a = otomatik_makro_veriler()
+@st.cache_data(ttl=3600)
+def endeks_getirileri(ticker):
+    """Verilen endeksin son 2 haftalık ve 2 aylık getirisini İŞ GÜNÜ (asof) mantığıyla hesaplar.
+    Hedef gün (14/60 takvim günü öncesi) hafta sonu/tatile denk gelirse, asof() otomatik olarak
+    bir ÖNCEKİ iş gününe snap eder (endeks index'inde yalnızca işlem günleri bulunur).
+    Ayrıca hangi tarihlerin baz alındığını döndürür ki kullanıcı manuel doğrulayabilsin."""
+    try:
+        df = yf.download(ticker, period="3mo", progress=False)
+        if df.empty:
+            return None
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        df.index = pd.to_datetime(df.index)
+        df = df.sort_index()
+
+        bugun = pd.Timestamp.now(tz=TURKEY_TZ).tz_localize(None)
+        gun_t = df.index.asof(bugun)                                  # bugün / son iş günü
+        gun_2h = df.index.asof(bugun - pd.Timedelta(days=14))         # ~2 hafta önce (iş günü)
+        gun_2a = df.index.asof(bugun - pd.Timedelta(days=60))         # ~2 ay önce (iş günü)
+        if pd.isna(gun_t) or pd.isna(gun_2h) or pd.isna(gun_2a):
+            return None
+
+        def fiyat(d):
+            v = df.loc[d, 'Close']
+            return float(v.iloc[0] if isinstance(v, pd.Series) else v)
+
+        p_t, p_2h, p_2a = fiyat(gun_t), fiyat(gun_2h), fiyat(gun_2a)
+        return {
+            "ret_2h": (p_t - p_2h) / p_2h * 100,
+            "ret_2a": (p_t - p_2a) / p_2a * 100,
+            "tarih_bugun": pd.Timestamp(gun_t).strftime("%d.%m.%Y"),
+            "tarih_2h": pd.Timestamp(gun_2h).strftime("%d.%m.%Y"),
+            "tarih_2a": pd.Timestamp(gun_2a).strftime("%d.%m.%Y"),
+            "yedek": False,
+        }
+    except Exception:
+        return None
+
+# V2.4 -> BIST100 (XU100) | V1.4 -> BIST TÜM (XUTUM)
+_YEDEK = {"ret_2h": -1.98, "ret_2a": 0.76, "tarih_bugun": "N/A", "tarih_2h": "N/A", "tarih_2a": "N/A", "yedek": True}
+_xu100 = endeks_getirileri("XU100.IS") or dict(_YEDEK)
+_xutum = endeks_getirileri("XUTUM.IS")
+if _xutum is None:
+    # XUTUM sembolü Yahoo'da çözülemezse: XU100 çekildiyse onu yedek olarak işaretleyip kullan
+    _xutum = {**_xu100, "yedek": True} if _xu100.get("tarih_bugun") != "N/A" else dict(_YEDEK)
+
+tufe_12 = TUFE_12
+oto_2h, oto_2a = _xu100["ret_2h"], _xu100["ret_2a"]                    # V2.4 girdileri (XU100)
+oto_xutum_2h, oto_xutum_2a = _xutum["ret_2h"], _xutum["ret_2a"]        # V1.4 girdileri (XUTUM)
+
+
+# --- EFEKTİF (BİLANÇO-AYARLI) KOLON HESAPLAYICI ---
+def ekle_efektif_kolonlar(df):
+    """GELDİ/GELMEDİ tespiti + tüm efektif dönem kolonlarını kurar.
+    Bir hissenin son çeyreği (0) ile -1 dönemi birebir aynıysa (fintables aynı değeri gösterir),
+    o hissenin YENİ bilançosu henüz GELMEMİŞ demektir; bu durumda karşılaştırma dönemi bir
+    çeyrek geriye kaydırılır (-1->-2, -4->-5). Hem V2.4 hem V1.4 bu kolonları kullanır."""
+    bilanco_gelmedi = (
+        (df["BrutEFK_0"] == df["BrutEFK_1"]) &
+        (df["EFK_0"] == df["EFK_1"]) &
+        (df["FAVOK_0"] == df["FAVOK_1"]) &
+        ((df["BrutEFK_0"] != 0) | (df["EFK_0"] != 0) | (df["FAVOK_0"] != 0))
+    )
+    df["Bilanco_Durum"] = np.where(bilanco_gelmedi, "GELMEDİ (Eski)", "GELDİ (Yeni)")
+
+    def ef(taban_1, taban_2):
+        # GELMEDİ ise -2 dönemi (varsa) yoksa -1; GELDİ ise -1 dönemi
+        return np.where(bilanco_gelmedi,
+                        np.where(df[taban_2] != 0, df[taban_2], df[taban_1]),
+                        df[taban_1])
+
+    # V2.4 + ortak
+    df["ef_EFK_1"] = ef("EFK_1", "EFK_2")
+    df["ef_EFK_4"] = ef("EFK_4", "EFK_5")
+    df["ef_FAVOK_1"] = ef("FAVOK_1", "FAVOK_2")
+    df["ef_BrutEFK_1"] = ef("BrutEFK_1", "BrutEFK_2")
+    df["ef_ROE_1"] = ef("ROE_1", "ROE_2")
+    df["ef_ROE_4"] = ef("ROE_4", "ROE_5")
+    # V1.4 için ek: -4 finansallar (GELMEDİ fallback -5)
+    df["ef_FAVOK_4"] = ef("FAVOK_4", "FAVOK_5")
+    df["ef_BrutEFK_4"] = ef("BrutEFK_4", "BrutEFK_5")
+    # V1.4 için ek: gecikmeli yıllık büyüme (ivme karşılaştırması)
+    df["ef_EFKBuyume_1"] = ef("EFKBuyume_1", "EFKBuyume_2")
+    df["ef_FAVOKBuyume_1"] = ef("FAVOKBuyume_1", "FAVOKBuyume_2")
+    return df
 
 # --- SESSION STATE & F5 VERİ KALICILIĞI YÖNETİMİ ---
 if "df_merged" not in st.session_state: st.session_state.df_merged = None
@@ -119,11 +181,16 @@ with header_col1:
 
 with header_col2:
     zaman_bilgisi = f"<br><span>🕒 Yükleme: <b>{st.session_state.upload_time}</b></span>" if st.session_state.upload_time else ""
+    xutum_not = " ⚠️(yedek: XU100)" if _xutum.get("yedek") else ""
+    xu100_not = " ⚠️(yedek)" if _xu100.get("yedek") else ""
     st.markdown(
         f"""
-        <div style="background-color: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #e9ecef; font-size: 13px; text-align: right;">
-            <b>⚙️ Otomatik Makro Girdiler:</b><br>
-            <span>TÜFE(12): <b>%{tufe_12:.2f}</b> | XU100 2A: <b>%{oto_2a:.2f}</b> | XU100 2H: <b>%{oto_2h:.2f}</b></span>
+        <div style="background-color: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #e9ecef; font-size: 12px; text-align: right;">
+            <b>⚙️ Otomatik Makro Girdiler</b> &nbsp;|&nbsp; TÜFE(12): <b>%{tufe_12:.2f}</b><br>
+            <span>📈 <b>XU100</b> (V2.4) → 2H: <b>%{oto_2h:.2f}</b> · 2A: <b>%{oto_2a:.2f}</b>{xu100_not}</span><br>
+            <span style="font-size:10.5px;color:#6c757d;">2H: {_xu100['tarih_2h']} → {_xu100['tarih_bugun']} &nbsp;·&nbsp; 2A: {_xu100['tarih_2a']} → {_xu100['tarih_bugun']}</span><br>
+            <span>📊 <b>XUTUM</b> (V1.4) → 2H: <b>%{oto_xutum_2h:.2f}</b> · 2A: <b>%{oto_xutum_2a:.2f}</b>{xutum_not}</span><br>
+            <span style="font-size:10.5px;color:#6c757d;">2H: {_xutum['tarih_2h']} → {_xutum['tarih_bugun']} &nbsp;·&nbsp; 2A: {_xutum['tarih_2a']} → {_xutum['tarih_bugun']}</span>
             {zaman_bilgisi}
         </div>
         """,
@@ -183,7 +250,18 @@ if current_page == "data_mgmt":
 
     if file1 and file2:
         try:
-            df1 = pd.read_excel(file1).iloc[:, :23]
+            ham1 = pd.read_excel(file1)
+            ham2 = pd.read_excel(file2)
+
+            # --- SÜTUN SAYISI GÜVENLİK KONTROLÜ ---
+            if ham1.shape[1] < 23:
+                st.error(f"❌ 1. dosyada en az 23 sütun bekleniyordu, {ham1.shape[1]} bulundu. Fintables şablonunuzu kontrol edin.")
+                st.stop()
+            if ham2.shape[1] < 15:
+                st.error(f"❌ 2. dosyada (1) en az 15 sütun bekleniyordu, {ham2.shape[1]} bulundu. Yeni büyüme/−4/−5 sütunlarını eklediğinizden emin olun.")
+                st.stop()
+
+            df1 = ham1.iloc[:, :23]
             df1.columns = [
                 "Kod", "ROE_0", "ROE_1", "ROE_4", "BrutEFK_0", "BrutEFK_1", 
                 "EFK_0", "EFK_1", "EFK_4", "FAVOK_0", "FAVOK_1", 
@@ -192,26 +270,17 @@ if current_page == "data_mgmt":
                 "Getiri_2a", "Getiri_6a", "Kapanis"
             ]
 
-            df2 = pd.read_excel(file2).iloc[:, :7]
-            df2.columns = ["Kod", "ROE_2", "BrutEFK_2", "EFK_2", "FAVOK_2", "ROE_5", "EFK_5"]
+            df2 = ham2.iloc[:, :15]
+            df2.columns = [
+                "Kod", "ROE_2", "BrutEFK_2", "EFK_2", "FAVOK_2", "ROE_5", "EFK_5",
+                "BrutEFK_4", "FAVOK_4", "BrutEFK_5", "FAVOK_5",
+                "EFKBuyume_1", "FAVOKBuyume_1", "EFKBuyume_2", "FAVOKBuyume_2"
+            ]
 
             df = pd.merge(df1, df2, on="Kod", how="left").fillna(0)
 
-            bilanco_gelmedi = (
-                (df["BrutEFK_0"] == df["BrutEFK_1"]) & 
-                (df["EFK_0"] == df["EFK_1"]) & 
-                (df["FAVOK_0"] == df["FAVOK_1"]) & 
-                ((df["BrutEFK_0"] != 0) | (df["EFK_0"] != 0) | (df["FAVOK_0"] != 0))
-            )
-
-            df["Bilanco_Durum"] = np.where(bilanco_gelmedi, "GELMEDİ (Eski)", "GELDİ (Yeni)")
-
-            df["ef_EFK_1"] = np.where(bilanco_gelmedi, np.where(df["EFK_2"] != 0, df["EFK_2"], df["EFK_1"]), df["EFK_1"])
-            df["ef_EFK_4"] = np.where(bilanco_gelmedi, np.where(df["EFK_5"] != 0, df["EFK_5"], df["EFK_4"]), df["EFK_4"])
-            df["ef_FAVOK_1"] = np.where(bilanco_gelmedi, np.where(df["FAVOK_2"] != 0, df["FAVOK_2"], df["FAVOK_1"]), df["FAVOK_1"])
-            df["ef_BrutEFK_1"] = np.where(bilanco_gelmedi, np.where(df["BrutEFK_2"] != 0, df["BrutEFK_2"], df["BrutEFK_1"]), df["BrutEFK_1"])
-            df["ef_ROE_1"] = np.where(bilanco_gelmedi, np.where(df["ROE_2"] != 0, df["ROE_2"], df["ROE_1"]), df["ROE_1"])
-            df["ef_ROE_4"] = np.where(bilanco_gelmedi, np.where(df["ROE_5"] != 0, df["ROE_5"], df["ROE_4"]), df["ROE_4"])
+            # GELDİ/GELMEDİ tespiti + tüm efektif dönem kolonları (V2.4 + V1.4 ortak)
+            df = ekle_efektif_kolonlar(df)
 
             st.session_state.df_merged = df
             now_tr = datetime.datetime.now(TURKEY_TZ)
@@ -303,25 +372,35 @@ elif current_page in ["v14_radar", "v14_diag"]:
     if st.session_state.df_merged is not None:
         df = st.session_state.df_merged.copy()
 
-        # GEÇİCİ ÇÖKME GUARD'I: Fintables merge'de olmayan -4 sütunları (FAVOK_4, BrutEFK_4)
-        # yoksa -1 değerine düşür ki V1.4 sayfası KeyError vermeden açılsın.
-        # NOT: V1.4 mantığı henüz taslak; bunu birlikte tasarlarken kaldıracağız.
-        for _eksik, _kaynak in [("FAVOK_4", "FAVOK_1"), ("BrutEFK_4", "BrutEFK_1")]:
-            if _eksik not in df.columns:
-                df[_eksik] = df[_kaynak]
+        # --- YENİ KOLON GÜVENCESİ (bayat cache'e karşı) ---
+        # V1.4 yeni efektif kolonlara ihtiyaç duyar. Bunlar yoksa ama ham -4/-5/büyüme
+        # sütunları varsa yeniden hesapla; ham veri de yoksa yeniden yükleme iste.
+        _gerekli = ["ef_FAVOK_4", "ef_BrutEFK_4", "ef_EFKBuyume_1", "ef_FAVOKBuyume_1"]
+        if not all(c in df.columns for c in _gerekli):
+            _baz = ["FAVOK_4", "FAVOK_5", "BrutEFK_4", "BrutEFK_5",
+                    "EFKBuyume_1", "EFKBuyume_2", "FAVOKBuyume_1", "FAVOKBuyume_2"]
+            if all(c in df.columns for c in _baz):
+                df = ekle_efektif_kolonlar(df)
+            else:
+                st.warning("⚠️ ALFA V1.4 için güncel **15 sütunlu file(1)** gerekiyor. "
+                           "Lütfen 'Veri Yönetimi' sekmesinden yeni Fintables dosyalarını yükleyin.")
+                st.stop()
 
-        # V1.4 TEMEL FİLTRELERİ
+        # V1.4 TEMEL FİLTRELERİ  (tüm -1/-4 karşılaştırmaları EFEKTİF kolonlarla; endeks = XUTUM)
         df["pdddLimit"] = np.where(df["ROE_0"] > 90, 8 + (df["ROE_0"] - 90) * 0.07, 8)
-        
+
         a = df["ROE_0"] > tufe_12
         b = df["NetBorc_FAVOK"] < 4
         d = df["PDDD"] < df["pdddLimit"]
-        ee = df["Getiri_2h"] > (oto_2h - 10)
+        ee = df["Getiri_2h"] > (oto_xutum_2h - 10)                     # XUTUM
         f = df["NetSatisBuyume"] > 0
-        gx = (df["FAVOKBuyume"] > tufe_12) | ((df["FAVOK_0"] > df["FAVOK_1"]) & (df["FAVOK_0"] > df["FAVOK_4"]))
-        hx = ((df["BrutEFKBuyume"] > tufe_12) | ((df["BrutEFK_0"] > df["BrutEFK_1"]) & (df["BrutEFK_0"] > df["BrutEFK_4"]))) & \
-             ((df["EFKBuyume"] > tufe_12) | ((df["EFK_0"] > df["EFK_1"]) & (df["EFK_0"] > df["EFK_4"])))
-        h = df["Getiri_2a"] > oto_2a
+        gx = (df["FAVOKBuyume"] > tufe_12) | \
+             ((df["FAVOK_0"] > df["ef_FAVOK_1"]) & (df["FAVOK_0"] > df["ef_FAVOK_4"]))
+        hx = ((df["BrutEFKBuyume"] > tufe_12) |
+              ((df["BrutEFK_0"] > df["ef_BrutEFK_1"]) & (df["BrutEFK_0"] > df["ef_BrutEFK_4"]))) & \
+             ((df["EFKBuyume"] > tufe_12) |
+              ((df["EFK_0"] > df["ef_EFK_1"]) & (df["EFK_0"] > df["ef_EFK_4"])))
+        h = df["Getiri_2a"] > oto_xutum_2a                            # XUTUM
         j = df["Getiri_1a"] > -15
         efkTeyit = (df["EFK_0"] >= df["ef_EFK_1"]) | (df["EFK_0"] >= df["ef_EFK_4"])
         roeTeyit = (df["ROE_0"] >= df["ef_ROE_1"]) | (df["ROE_0"] >= df["ef_ROE_4"])
@@ -389,6 +468,8 @@ elif current_page in ["v14_radar", "v14_diag"]:
                     sb = df_teknik["NetSatisBuyume"]
                     beb = df_teknik["BrutEFKBuyume"]
                     pddd = df_teknik["PDDD"]
+                    ef_eb1 = df_teknik["ef_EFKBuyume_1"]   # efektif -1 (GELMEDİ ise -2) EFK büyümesi
+                    ef_fb1 = df_teknik["ef_FAVOKBuyume_1"] # efektif -1 (GELMEDİ ise -2) FAVÖK büyümesi
 
                     roeSkor = np.where(roe > 50, 100, roe * 2)
                     momentumSkor = np.where(m6 > 100, 100, m6)
@@ -401,9 +482,12 @@ elif current_page in ["v14_radar", "v14_diag"]:
                     sbSkor = np.where(sb > 50, 100, np.where(sb > 0, sb * 2, 0))
                     buySkor = (ebSkor + fbSkor + sbSkor) / 3
 
-                    # V1.4 ÖZEL BONUS & CEZALAR
-                    ivmeBonus = np.where((eb > 0), 15, 5) # EFK büyüme ivme primi
-                    favokIvme = np.where(fb > 0, 10, 0)
+                    # V1.4 ÖZEL BONUS & CEZALAR  (spec: yıllık büyüme ivmesi, efektif -1 ile)
+                    # ivmeBonus = IF(EFKBüy(0)>EFKBüy(-1) ve EFKBüy(0)>0, 15, IF(EFKBüy(0)>EFKBüy(-1), 5, 0))
+                    ivmeBonus = np.where((eb > ef_eb1) & (eb > 0), 15,
+                                         np.where(eb > ef_eb1, 5, 0))
+                    # favokIvme = IF(FAVOKBüy(0)>FAVOKBüy(-1) ve FAVOKBüy(0)>0, 10, 0)
+                    favokIvme = np.where((fb > ef_fb1) & (fb > 0), 10, 0)
                     maUzaklik = ((c_fiyat - ma200_val) / ma200_val) * 100
                     maUzakCeza = np.where(maUzaklik > 80, -15, np.where(maUzaklik > 60, -8, 0))
                     pdddSkor = np.where(pddd < 1.5, 25, np.where(pddd < 3, 15, np.where(pddd < 5, 5, np.where(pddd > 6, -10, 0))))
@@ -452,11 +536,11 @@ elif current_page in ["v14_radar", "v14_diag"]:
                     c_a = bool(th['ROE_0'] > tufe_12)
                     c_b = bool(th['NetBorc_FAVOK'] < 4)
                     c_d = bool(th['PDDD'] < p_lim)
-                    c_ee = bool(th['Getiri_2h'] > (oto_2h - 10))
+                    c_ee = bool(th['Getiri_2h'] > (oto_xutum_2h - 10))
                     c_f = bool(th['NetSatisBuyume'] > 0)
-                    c_gx = bool((th['FAVOKBuyume'] > tufe_12) or ((th['FAVOK_0'] > th['FAVOK_1']) and (th['FAVOK_0'] > th['FAVOK_4'])))
-                    c_hx = bool(((th['BrutEFKBuyume'] > tufe_12) or ((th['BrutEFK_0'] > th['BrutEFK_1']) and (th['BrutEFK_0'] > th['BrutEFK_4']))) and ((th['EFKBuyume'] > tufe_12) or ((th['EFK_0'] > th['EFK_1']) and (th['EFK_0'] > th['EFK_4']))))
-                    c_h = bool(th['Getiri_2a'] > oto_2a)
+                    c_gx = bool((th['FAVOKBuyume'] > tufe_12) or ((th['FAVOK_0'] > th['ef_FAVOK_1']) and (th['FAVOK_0'] > th['ef_FAVOK_4'])))
+                    c_hx = bool(((th['BrutEFKBuyume'] > tufe_12) or ((th['BrutEFK_0'] > th['ef_BrutEFK_1']) and (th['BrutEFK_0'] > th['ef_BrutEFK_4']))) and ((th['EFKBuyume'] > tufe_12) or ((th['EFK_0'] > th['ef_EFK_1']) and (th['EFK_0'] > th['ef_EFK_4']))))
+                    c_h = bool(th['Getiri_2a'] > oto_xutum_2a)
                     c_j = bool(th['Getiri_1a'] > -15)
                     c_teyit = bool((th['EFK_0'] >= th['ef_EFK_1']) or (th['EFK_0'] >= th['ef_EFK_4']))
                     c_roe_t = bool((th['ROE_0'] >= th['ef_ROE_1']) or (th['ROE_0'] >= th['ef_ROE_4']))
@@ -469,7 +553,7 @@ elif current_page in ["v14_radar", "v14_diag"]:
                     if not c_ee: takilan.append("2H Getiri Şartı")
                     if not c_f: takilan.append("Net Satış Büyümesi > 0")
                     if not (c_hx or c_gx or c_teyit): takilan.append("Büyüme / Teyit Şartı")
-                    if not c_h: takilan.append("2A Getiri > XU100")
+                    if not c_h: takilan.append("2A Getiri > XUTUM")
                     if not c_j: takilan.append("1A Getiri > -15")
                     if not c_roe_t: takilan.append("ROE Teyit Şartı")
                     if not c_k: takilan.append("Halka Açıklık < 60")
@@ -483,7 +567,7 @@ elif current_page in ["v14_radar", "v14_diag"]:
                         st.write(f"- 2H Getiri Şartı: {'✅ Geçti' if c_ee else '❌ Kaldı'}")
                         st.write(f"- Net Satış Büyümesi > 0: {'✅ Geçti' if c_f else '❌ Kaldı'}")
                         st.write(f"- Büyüme/Teyit: {'✅ Geçti' if (c_hx or c_gx or c_teyit) else '❌ Kaldı'}")
-                        st.write(f"- 2A Getiri > XU100: {'✅ Geçti' if c_h else '❌ Kaldı'}")
+                        st.write(f"- 2A Getiri > XUTUM: {'✅ Geçti' if c_h else '❌ Kaldı'}")
                         st.write(f"- 1A Getiri > -15: {'✅ Geçti' if c_j else '❌ Kaldı'}")
                         st.write(f"- ROE Teyit: {'✅ Geçti' if c_roe_t else '❌ Kaldı'}")
                         st.write(f"- Halka Açıklık < 60: {'✅ Geçti' if c_k else '❌ Kaldı'}")
