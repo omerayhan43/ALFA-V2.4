@@ -803,10 +803,212 @@ elif current_page in ["v24_radar", "v24_diag"]:
                         for kr in takilan: st.write(f"• {kr}")
                     else: st.success("🎉 Tebrikler! Hisse tüm filtrelerden başarıyla geçti.")
 
-# ALFA V3.4 ŞABLONU
+# --- 🤖 ALFA V3.4 SİSTEMİ ---
 elif current_page in ["v34_radar", "v34_diag"]:
-    st.markdown("### 🤖 ALFA V3.4")
-    st.info("🛠️ **ALFA V3.4** algoritma detaylarını gönderdiğinde anında kodlanacaktır.")
+    if st.session_state.df_merged is not None:
+        df = st.session_state.df_merged.copy()
+
+        # V3.4 TEMEL FİLTRELERİ  (-1 karşılaştırmaları EFEKTİF; endeks = XU100; gx/hx OR-yapılı)
+        df["pdddLimit"] = np.where(df["ROE_0"] > 90, 8 + (df["ROE_0"] - 90) * 0.07, 8)
+
+        a = df["Getiri_2a"] > oto_2a                                  # XU100
+        b = df["ROE_0"] > tufe_12
+        c = df["NetBorc_FAVOK"] < 4
+        d = df["PDDD"] < df["pdddLimit"]
+        e = df["Getiri_2h"] > (oto_2h - 10)                           # XU100
+        f = df["Getiri_1a"] > -15
+        ns = df["NetSatisBuyume"] > 0
+        gx = (df["FAVOKBuyume"] > tufe_12) | (df["FAVOK_0"] > df["ef_FAVOK_1"])
+        hx = ((df["BrutEFKBuyume"] > tufe_12) | (df["BrutEFK_0"] > df["ef_BrutEFK_1"])) & \
+             ((df["EFKBuyume"] > tufe_12) | (df["EFK_0"] > df["ef_EFK_1"]))
+        efkTeyit = (df["EFK_0"] >= df["ef_EFK_1"]) | (df["EFK_0"] >= df["ef_EFK_4"])
+        roeTeyit = (df["ROE_0"] >= df["ef_ROE_1"]) | (df["ROE_0"] >= df["ef_ROE_4"])
+        k = df["HAOran"] < 60
+
+        temel_filtreliler_v34 = a & b & c & d & e & f & ns & (hx | gx | efkTeyit) & roeTeyit & k
+        df_temel = df[temel_filtreliler_v34].copy()
+
+        # RADAR VE TARAMALAR
+        if current_page == "v34_radar":
+            st.markdown("### 🤖 ALFA V3.4 - Radar & Taramalar")
+            teknik_asanadan_gecenler = []
+            analiz_edilen = 0
+
+            if len(df_temel) > 0:
+                with st.spinner("🔄 ALFA V3.4 için MA20, MA60, MA75, MA200 verileri anlık çekiliyor..."):
+                    for idx, row in df_temel.iterrows():
+                        kod = str(row["Kod"]).strip() + ".IS"
+                        try:
+                            hist = yf.download(kod, period="1y", progress=False)
+                            if not hist.empty:
+                                if isinstance(hist.columns, pd.MultiIndex):
+                                    hist.columns = hist.columns.get_level_values(0)
+                                hist = hist.sort_index().dropna()
+                                close = hist['Close']
+                                if isinstance(close, pd.DataFrame): close = close.iloc[:, 0]
+                                if len(close) >= 200:
+                                    analiz_edilen += 1
+                                    c_val = float(close.iloc[-1])
+                                    ma20 = float(close.rolling(20).mean().iloc[-1])
+                                    ma60 = float(close.rolling(60).mean().iloc[-1])
+                                    ma75 = float(close.rolling(75).mean().iloc[-1])
+                                    ma200 = float(close.rolling(200).mean().iloc[-1])
+
+                                    df_temel.loc[idx, 'Kapanis_Anlik'] = round(c_val, 2)
+                                    df_temel.loc[idx, 'MA20'] = round(ma20, 2)
+                                    df_temel.loc[idx, 'MA60'] = round(ma60, 2)
+                                    df_temel.loc[idx, 'MA75'] = round(ma75, 2)
+                                    df_temel.loc[idx, 'MA200'] = round(ma200, 2)
+
+                                    # V3.4 TEKNİK ŞARTI: MA20>MA60 & MA75>MA200 & C>MA75
+                                    if (ma20 > ma60) and (ma75 > ma200) and (c_val > ma75):
+                                        teknik_asanadan_gecenler.append(idx)
+                        except:
+                            continue
+
+            df_teknik = df_temel.loc[teknik_asanadan_gecenler].copy()
+
+            m1, m2, m3 = st.columns(3)
+            m1.metric(label="📊 Toplam İncelenen", value=f"{len(df)} Hisse")
+            m2.metric(label="🏛️ Temel Filtreyi Geçen", value=f"{len(df_temel)} Hisse")
+            m3.metric(label="🏆 Teknik & Trendi Geçen (Adaylar)", value=f"{len(df_teknik)} Hisse")
+            if len(df_temel) > 0:
+                st.caption(f"ℹ️ Temeli geçen {len(df_temel)} adaydan **{analiz_edilen}** tanesi için ≥200 günlük fiyat verisi çekilebildi. "
+                           f"{'Hepsi çekildi.' if analiz_edilen == len(df_temel) else 'Çekilemeyen adaylar yfinance verisi/geçmişi eksik olabilir.'}")
+            st.markdown("---")
+
+            if len(df_temel) > 0:
+                if len(df_teknik) > 0:
+                    roe = df_teknik["ROE_0"]
+                    m6 = df_teknik["Getiri_6a"]
+                    m2 = df_teknik["Getiri_2a"]
+                    c_fiyat = df_teknik["Kapanis"]          # trend skoru: fintables Kapanış (spec: c=Kapanis())
+                    ma75_val = df_teknik["MA75"]
+                    eb = df_teknik["EFKBuyume"]
+                    fb = df_teknik["FAVOKBuyume"]
+                    sb = df_teknik["NetSatisBuyume"]
+                    pddd = df_teknik["PDDD"]
+
+                    roeSkor = np.where(roe > 50, 100, roe * 2)
+                    momentumSkor = np.where(m6 > 100, 100, m6)
+                    m2Skor = np.where(m2 > 50, 100, m2 * 2)
+                    trendYuzdesi = ((c_fiyat - ma75_val) / ma75_val) * 100
+                    trendSkor = np.where(trendYuzdesi > 30, 30, np.where(trendYuzdesi < 0, 0, trendYuzdesi))
+                    pdddSkor = np.where(pddd < 1.5, 25, np.where(pddd < 3, 15, np.where(pddd < 5, 5, np.where(pddd > 6, -10, 0))))
+                    ebSkor = np.where(eb > 50, 100, np.where(eb > 0, eb * 2, 0))
+                    fbSkor = np.where(fb > 50, 100, np.where(fb > 0, fb * 2, 0))
+                    sbSkor = np.where(sb > 50, 100, np.where(sb > 0, sb * 2, 0))
+                    buySkor = (ebSkor + fbSkor + sbSkor) / 3
+
+                    # V3.4 FORMÜLÜ (V2.4'ün cezasız hali)
+                    df_teknik["SKOR"] = (
+                        (roeSkor * 0.30) + (buySkor * 0.20) + (momentumSkor * 0.15) +
+                        (m2Skor * 0.05) + (trendSkor * 0.18) + (pdddSkor * 0.12)
+                    )
+
+                    df_sonuc = df_teknik.sort_values(by="SKOR", ascending=False).reset_index(drop=True)
+                    df_sonuc.index += 1
+
+                    st.markdown("### 🏆 ALFA V3.4 Portföy Adayları (En İyi Skorlar)")
+                    def highlight_top5(s):
+                        return ['background-color: #d4edda; font-weight: bold;' if s.name <= 5 else '' for _ in s]
+
+                    st.dataframe(
+                        df_sonuc[["Kod", "SKOR", "Bilanco_Durum", "ROE_0", "PDDD", "Getiri_1a", "Getiri_6a"]]
+                        .head(15)
+                        .style.format(precision=2, subset=["SKOR", "ROE_0", "PDDD", "Getiri_1a", "Getiri_6a"])
+                        .apply(highlight_top5, axis=1),
+                        use_container_width=True
+                    )
+                else: st.warning("ALFA V3.4 teknik kriterlerini sağlayan hisse bulunamadı.")
+            else: st.warning("ALFA V3.4 temel kriterlerini sağlayan hisse bulunamadı.")
+
+        # TEŞHİS PANELİ
+        elif current_page == "v34_diag":
+            st.markdown("### 🔍 ALFA V3.4 - Hisse Teşhis Paneli")
+            hisse_listesi = [""] + sorted(df["Kod"].dropna().astype(str).str.upper().unique().tolist())
+            secilen_hisse = st.selectbox("Hisse Seçin / Arayın:", options=hisse_listesi)
+
+            if secilen_hisse:
+                tek_hisse_df = df[df["Kod"].str.upper() == secilen_hisse]
+                if not tek_hisse_df.empty:
+                    th = tek_hisse_df.iloc[0]
+                    p_lim = float(8 + (th['ROE_0'] - 90) * 0.07 if th['ROE_0'] > 90 else 8)
+
+                    c_a = bool(th['Getiri_2a'] > oto_2a)
+                    c_b = bool(th['ROE_0'] > tufe_12)
+                    c_c = bool(th['NetBorc_FAVOK'] < 4)
+                    c_d = bool(th['PDDD'] < p_lim)
+                    c_e = bool(th['Getiri_2h'] > (oto_2h - 10))
+                    c_f = bool(th['Getiri_1a'] > -15)
+                    c_ns = bool(th['NetSatisBuyume'] > 0)
+                    c_gx = bool((th['FAVOKBuyume'] > tufe_12) or (th['FAVOK_0'] > th['ef_FAVOK_1']))
+                    c_hx = bool(((th['BrutEFKBuyume'] > tufe_12) or (th['BrutEFK_0'] > th['ef_BrutEFK_1'])) and ((th['EFKBuyume'] > tufe_12) or (th['EFK_0'] > th['ef_EFK_1'])))
+                    c_teyit = bool((th['EFK_0'] >= th['ef_EFK_1']) or (th['EFK_0'] >= th['ef_EFK_4']))
+                    c_roe_t = bool((th['ROE_0'] >= th['ef_ROE_1']) or (th['ROE_0'] >= th['ef_ROE_4']))
+                    c_k = bool(th['HAOran'] < 60)
+
+                    takilan = []
+                    if not c_a: takilan.append("2A Getiri > XU100")
+                    if not c_b: takilan.append("ROE > TÜFE")
+                    if not c_c: takilan.append("Net Borç / FAVÖK < 4")
+                    if not c_d: takilan.append("PD/DD < Sınır")
+                    if not c_e: takilan.append("2H Getiri Şartı")
+                    if not c_f: takilan.append("1A Getiri > -15")
+                    if not c_ns: takilan.append("Net Satış Büyümesi > 0")
+                    if not (c_hx or c_gx or c_teyit): takilan.append("Büyüme / Teyit Şartı")
+                    if not c_roe_t: takilan.append("ROE Teyit Şartı")
+                    if not c_k: takilan.append("Halka Açıklık < 60")
+
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"#### 🏛️ ALFA V3.4 Temel Analiz ({secilen_hisse})")
+                        st.write(f"- 2A Getiri > XU100: {'✅ Geçti' if c_a else '❌ Kaldı'}")
+                        st.write(f"- ROE > TÜFE: {'✅ Geçti' if c_b else '❌ Kaldı'}")
+                        st.write(f"- Net Borç/FAVÖK < 4: {'✅ Geçti' if c_c else '❌ Kaldı'}")
+                        st.write(f"- PD/DD < Sınır: {'✅ Geçti' if c_d else '❌ Kaldı'}")
+                        st.write(f"- 2H Getiri Şartı: {'✅ Geçti' if c_e else '❌ Kaldı'}")
+                        st.write(f"- 1A Getiri > -15: {'✅ Geçti' if c_f else '❌ Kaldı'}")
+                        st.write(f"- Net Satış Büyümesi > 0: {'✅ Geçti' if c_ns else '❌ Kaldı'}")
+                        st.write(f"- Büyüme/Teyit: {'✅ Geçti' if (c_hx or c_gx or c_teyit) else '❌ Kaldı'}")
+                        st.write(f"- ROE Teyit: {'✅ Geçti' if c_roe_t else '❌ Kaldı'}")
+                        st.write(f"- Halka Açıklık < 60: {'✅ Geçti' if c_k else '❌ Kaldı'}")
+
+                    with col2:
+                        st.markdown(f"#### 📈 ALFA V3.4 Teknik Şartlar")
+                        try:
+                            h_yf = yf.download(secilen_hisse + ".IS", period="1y", progress=False)
+                            if not h_yf.empty:
+                                if isinstance(h_yf.columns, pd.MultiIndex): h_yf.columns = h_yf.columns.get_level_values(0)
+                                h_yf = h_yf.sort_index().dropna()
+                                cls = h_yf['Close']
+                                if isinstance(cls, pd.DataFrame): cls = cls.iloc[:, 0]
+                                if len(cls) >= 200:
+                                    c_val = float(cls.iloc[-1])
+                                    m20 = float(cls.rolling(20).mean().iloc[-1])
+                                    m60 = float(cls.rolling(60).mean().iloc[-1])
+                                    m75 = float(cls.rolling(75).mean().iloc[-1])
+                                    m200 = float(cls.rolling(200).mean().iloc[-1])
+
+                                    t1 = m20 > m60
+                                    t2 = m75 > m200
+                                    t3 = c_val > m75
+
+                                    st.write(f"- **MA20 > MA60:** {'✅' if t1 else '❌'} ({m20:.2f} > {m60:.2f})")
+                                    st.write(f"- **MA75 > MA200:** {'✅' if t2 else '❌'} ({m75:.2f} > {m200:.2f})")
+                                    st.write(f"- **Kapanış > MA75:** {'✅' if t3 else '❌'} ({c_val:.2f} > {m75:.2f})")
+
+                                    if not (t1 and t2 and t3):
+                                        takilan.append("ALFA V3.4 Teknik Şartı (MA20>MA60, MA75>MA200, C>MA75)")
+                        except Exception as ex: st.error(f"Teknik hata: {ex}")
+
+                    if takilan:
+                        st.markdown("---")
+                        st.warning("Hisse aşağıdaki kriterleri sağlamadığı için filtrelerden geçemedi:")
+                        for kr in takilan: st.write(f"• {kr}")
+                    else: st.success("🎉 Tebrikler! Hisse V3.4 filtrelerinin hepsinden başarıyla geçti.")
+    else:
+        st.info("👈 Önce 'Veri Yönetimi' sekmesinden Excel dosyalarını yükleyin.")
 
 # ALFA V1.2.3 ŞABLONU
 elif current_page in ["v123_radar", "v123_diag"]:
